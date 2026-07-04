@@ -7,7 +7,7 @@ const { logActivity } = require('./activityLog');
 // The two hardcoded bootstrap admins get the admin role automatically;
 // everyone else starts as a plain associate until a Manager/Admin account
 // promotes them (that promotion flow is a separate, not-yet-built function).
-const onUserCreate = functionsV1.auth.user().onCreate(async (user) => {
+async function handleUserCreate(user) {
   const bootstrapAdmin = getBootstrapAdmin(user.email);
   const role = bootstrapAdmin ? 'admin' : 'associate';
   const fullName = bootstrapAdmin ? bootstrapAdmin.fullName : (user.displayName || '');
@@ -32,6 +32,8 @@ const onUserCreate = functionsV1.auth.user().onCreate(async (user) => {
     targetId: user.uid,
     details: { email: user.email, role },
   });
-});
+}
 
-module.exports = { onUserCreate };
+const onUserCreate = functionsV1.auth.user().onCreate(handleUserCreate);
+
+module.exports = { onUserCreate, handleUserCreate };
