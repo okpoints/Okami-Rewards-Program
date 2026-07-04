@@ -4,6 +4,9 @@ const { db, admin } = require('./lib/admin');
 const { syncCortexFile } = require('./lib/driveSync');
 const { logActivity } = require('./lib/activityLog');
 const { requireRole } = require('./lib/roles');
+const { onUserCreate } = require('./lib/authTriggers');
+
+exports.onUserCreate = onUserCreate;
 
 // Must have Viewer access to the "Okami Rewards Program" Drive folder.
 const DRIVE_SERVICE_ACCOUNT = 'firebase-adminsdk-fbsvc@okami-rewards-program-8e577.iam.gserviceaccount.com';
