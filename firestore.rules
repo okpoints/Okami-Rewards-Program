@@ -1,0 +1,67 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function role() {
+      return request.auth.token.role;
+    }
+
+    function isManagerOrAdmin() {
+      return isSignedIn() && (role() == 'manager' || role() == 'admin');
+    }
+
+    function isAdmin() {
+      return isSignedIn() && role() == 'admin';
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isManagerOrAdmin());
+      allow create, delete: if false; // accounts are provisioned server-side
+      allow update: if isSignedIn() && request.auth.uid == userId
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['phone', 'notificationPreferences']);
+
+      match /pointsLedger/{week} {
+        allow read: if isSignedIn() && (request.auth.uid == userId || isManagerOrAdmin());
+        allow write: if false; // written only by the Cortex sync / review-resolution functions
+      }
+
+      match /notifications/{notifId} {
+        allow read: if isSignedIn() && request.auth.uid == userId;
+        allow update: if isSignedIn() && request.auth.uid == userId
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+        allow create, delete: if false;
+      }
+    }
+
+    match /rewards/{rewardId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /redemptionRequests/{requestId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isManagerOrAdmin());
+      allow create, update, delete: if false; // must go through requestRedemption / resolveRedemption
+    }
+
+    match /pendingReview/{reviewId} {
+      allow read: if isManagerOrAdmin();
+      allow write: if false; // Cloud Functions only
+    }
+
+    match /cortexImports/{importId} {
+      allow read: if isManagerOrAdmin();
+      allow write: if false;
+    }
+
+    match /activityLog/{logId} {
+      allow read: if isManagerOrAdmin();
+      allow write: if false;
+    }
+  }
+}
