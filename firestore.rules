@@ -82,7 +82,10 @@ service cloud.firestore {
     }
 
     match /activityLog/{logId} {
-      allow read: if isManagerOrAdmin();
+      // Direct reads are admin-only. Managers must go through the
+      // queryActivityLog function, since "driver activity only, never
+      // admin activity, only if granted" can't be safely expressed here.
+      allow read: if isAdmin();
       allow write: if false;
     }
   }

@@ -23,6 +23,8 @@ const {
   resolveBonusTaskLogic,
 } = require('./lib/bonusTasks');
 const { adjustPointsLogic } = require('./lib/pointAdjustments');
+const { setManagerPermissionLogic } = require('./lib/permissions');
+const { queryActivityLogLogic } = require('./lib/activityLogQuery');
 const { requireRole } = require('./lib/roles');
 
 exports.onUserCreate = onUserCreate;
@@ -87,9 +89,18 @@ exports.enrollInBonusTask = onCall((request) => enrollInBonusTaskLogic(request.a
 
 exports.resolveBonusTask = onCall((request) => resolveBonusTaskLogic(request.auth, request.data, requireRole));
 
-// Manual point add/deduct (reason required) - stand-in for no-call/no-show
-// and similar deductions until the messy Okami sheets can be parsed.
+// Manual point add/deduct (reason required). Covers no-call/no-show and
+// similar deductions until the messy Okami sheets can be parsed - and
+// stays available as a permanent feature after that too.
 exports.adjustPoints = onCall((request) => adjustPointsLogic(request.auth, request.data, requireRole));
+
+// Admin grants/revokes optional permissions on a manager's account
+// (currently: viewActivityLog).
+exports.setManagerPermission = onCall((request) => setManagerPermissionLogic(request.auth, request.data, requireRole));
+
+// The sanctioned way to browse the activity log - see firestore.rules for
+// why direct client reads are admin-only.
+exports.queryActivityLog = onCall((request) => queryActivityLogLogic(request.auth, request.data));
 
 // Flags roster entries with no Cortex activity in ~3 months for manager
 // review - never auto-deactivates anyone.
