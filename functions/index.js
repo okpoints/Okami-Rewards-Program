@@ -4,9 +4,17 @@ const { db, admin } = require('./lib/admin');
 const { syncCortexFile } = require('./lib/driveSync');
 const { onUserCreate } = require('./lib/authTriggers');
 const { requestRedemptionLogic, resolveRedemptionLogic } = require('./lib/redemptions');
-const { findRosterCandidatesLogic, requestIdentityLinkLogic, resolveIdentityLinkLogic } = require('./lib/roster');
+const {
+  findRosterCandidatesLogic,
+  requestIdentityLinkLogic,
+  resolveIdentityLinkLogic,
+  addRosterAliasLogic,
+  createRosterEntryLogic,
+  setRosterActiveLogic,
+} = require('./lib/roster');
 const { seedInitialRewardsLogic } = require('./lib/rewardsSeed');
 const { scanForInactiveDrivers } = require('./lib/inactivityScan');
+const { recordLoginLogic } = require('./lib/session');
 const { requireRole } = require('./lib/roles');
 
 exports.onUserCreate = onUserCreate;
@@ -43,6 +51,18 @@ exports.findRosterCandidates = onCall((request) => findRosterCandidatesLogic(req
 exports.requestIdentityLink = onCall((request) => requestIdentityLinkLogic(request.auth, request.data));
 
 exports.resolveIdentityLink = onCall((request) => resolveIdentityLinkLogic(request.auth, request.data, requireRole));
+
+// Roster management: managers/admins can pre-add aliases/nicknames, add a
+// driver manually before Cortex reports them, and toggle active/inactive.
+exports.addRosterAlias = onCall((request) => addRosterAliasLogic(request.auth, request.data, requireRole));
+
+exports.createRosterEntry = onCall((request) => createRosterEntryLogic(request.auth, request.data, requireRole));
+
+exports.setRosterActive = onCall((request) => setRosterActiveLogic(request.auth, request.data, requireRole));
+
+// Called by the client right after sign-in so "last login" shows on the
+// manager-facing roster view.
+exports.recordLogin = onCall((request) => recordLoginLogic(request.auth));
 
 exports.seedInitialRewards = onCall((request) => seedInitialRewardsLogic(request.auth, request.data));
 

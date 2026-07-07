@@ -118,4 +118,107 @@ async function resolveIdentityLinkLogic(auth, data, requireRole) {
   return { success: true, creditedPoints: totalHistoricalPoints };
 }
 
-module.exports = { findRosterCandidatesLogic, requestIdentityLinkLogic, resolveIdentityLinkLogic };
+// Manager/admin adds an alias/nickname to a roster entry (e.g. "Alex" for
+// "Alejandro Martinez") so future signup matching catches it - this is how
+// nicknames get handled, since we don't guess them automatically.
+async function addRosterAliasLogic(auth, data, requireRole) {
+  const role = requireRole(auth, ['manager', 'admin']);
+  const { rosterId, alias } = data || {};
+  if (!rosterId || !alias) {
+    throw new HttpsError('invalid-argument', 'rosterId and alias are required.');
+  }
+
+  const rosterRef = db.collection('roster').doc(rosterId);
+  const rosterSnap = await rosterRef.get();
+  if (!rosterSnap.exists) throw new HttpsError('not-found', 'Roster entry not found.');
+
+  await rosterRef.update({ aliases: admin.firestore.FieldValue.arrayUnion(alias.trim()) });
+
+  await logActivity({
+    actorId: auth.uid,
+    actorName: auth.token.name || 'Unknown',
+    actorPosition: role,
+    action: 'add_roster_alias',
+    targetType: 'roster',
+    targetId: rosterId,
+    details: { alias },
+  });
+
+  return { success: true };
+}
+
+// Manager/admin manually adds someone to the roster before Cortex has ever
+// reported them (e.g. a brand-new hire's first week isn't imported yet).
+// Note: if Cortex later reports this same person under a real Transporter
+// ID, that becomes a second, separate roster doc - reconciling the two is
+// a manual step for now (merge support can be added later if this comes
+// up often in practice).
+async function createRosterEntryLogic(auth, data, requireRole) {
+  const role = requireRole(auth, ['manager', 'admin']);
+  const { fullName, aliases } = data || {};
+  if (!fullName) throw new HttpsError('invalid-argument', 'fullName is required.');
+
+  const rosterRef = db.collection('roster').doc();
+  await rosterRef.set({
+    transporterId: null,
+    cortexFullName: fullName.trim(),
+    aliases: aliases || [],
+    source: 'manual',
+    linkedUserId: null,
+    active: true,
+    lastSeenWeek: null,
+    createdAt: admin.firestore.Timestamp.now(),
+    updatedAt: admin.firestore.Timestamp.now(),
+  });
+
+  await logActivity({
+    actorId: auth.uid,
+    actorName: auth.token.name || 'Unknown',
+    actorPosition: role,
+    action: 'create_roster_entry',
+    targetType: 'roster',
+    targetId: rosterRef.id,
+    details: { fullName },
+  });
+
+  return { success: true, rosterId: rosterRef.id };
+}
+
+// Manager/admin flips a roster entry active/inactive - e.g. after acting on
+// an inactivityScan notification. Never automatic.
+async function setRosterActiveLogic(auth, data, requireRole) {
+  const role = requireRole(auth, ['manager', 'admin']);
+  const { rosterId, active } = data || {};
+  if (!rosterId || typeof active !== 'boolean') {
+    throw new HttpsError('invalid-argument', 'rosterId and a boolean active are required.');
+  }
+
+  const rosterRef = db.collection('roster').doc(rosterId);
+  const rosterSnap = await rosterRef.get();
+  if (!rosterSnap.exists) throw new HttpsError('not-found', 'Roster entry not found.');
+
+  await rosterRef.update({
+    active,
+    inactivityFlaggedAt: active ? admin.firestore.FieldValue.delete() : rosterSnap.data().inactivityFlaggedAt || null,
+  });
+
+  await logActivity({
+    actorId: auth.uid,
+    actorName: auth.token.name || 'Unknown',
+    actorPosition: role,
+    action: active ? 'reactivate_roster_entry' : 'deactivate_roster_entry',
+    targetType: 'roster',
+    targetId: rosterId,
+  });
+
+  return { success: true };
+}
+
+module.exports = {
+  findRosterCandidatesLogic,
+  requestIdentityLinkLogic,
+  resolveIdentityLinkLogic,
+  addRosterAliasLogic,
+  createRosterEntryLogic,
+  setRosterActiveLogic,
+};

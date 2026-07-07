@@ -17,14 +17,18 @@ function normalizeName(rawName) {
 // Cortex has full legal names (first/middle/last/second-last), but a driver
 // usually signs up with a shortened version - e.g. "Edgar Gonzales" for
 // "Edgar Rafael Morales Gonzales". A roster entry is a candidate if every
-// token the driver typed appears somewhere in their full Cortex name.
+// token the driver typed appears somewhere in their full Cortex name or in
+// an alias a manager added. Aliases add to the pool of recognized tokens
+// rather than needing to stand alone as a complete name - "Alex" as an
+// alias plus "Martinez" from the Cortex name together match "Alex Martinez".
 function findCandidates(enteredName, rosterEntries) {
   const enteredTokens = tokenize(enteredName);
   if (enteredTokens.length === 0) return [];
 
   return rosterEntries.filter((entry) => {
-    const rosterTokens = new Set(tokenize(entry.cortexFullName));
-    return enteredTokens.every((token) => rosterTokens.has(token));
+    const nameVariants = [entry.cortexFullName, ...(entry.aliases || [])];
+    const knownTokens = new Set(nameVariants.flatMap(tokenize));
+    return enteredTokens.every((token) => knownTokens.has(token));
   });
 }
 
