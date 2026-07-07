@@ -66,6 +66,21 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /bonusTasks/{taskId} {
+      allow read: if isSignedIn(); // everyone can browse the task library
+      allow write: if false; // Cloud Functions only
+
+      match /enrollments/{userId} {
+        allow read: if isSignedIn() && (request.auth.uid == userId || isManagerOrAdmin());
+        allow write: if false; // Cloud Functions only
+      }
+    }
+
+    match /pointAdjustments/{adjustmentId} {
+      allow read: if isManagerOrAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow write: if false; // Cloud Functions only
+    }
+
     match /activityLog/{logId} {
       allow read: if isManagerOrAdmin();
       allow write: if false;

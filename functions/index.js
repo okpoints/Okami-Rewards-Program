@@ -15,6 +15,14 @@ const {
 const { seedInitialRewardsLogic } = require('./lib/rewardsSeed');
 const { scanForInactiveDrivers } = require('./lib/inactivityScan');
 const { recordLoginLogic } = require('./lib/session');
+const {
+  createBonusTaskLogic,
+  updateBonusTaskLogic,
+  deleteBonusTaskLogic,
+  enrollInBonusTaskLogic,
+  resolveBonusTaskLogic,
+} = require('./lib/bonusTasks');
+const { adjustPointsLogic } = require('./lib/pointAdjustments');
 const { requireRole } = require('./lib/roles');
 
 exports.onUserCreate = onUserCreate;
@@ -65,6 +73,23 @@ exports.setRosterActive = onCall((request) => setRosterActiveLogic(request.auth,
 exports.recordLogin = onCall((request) => recordLoginLogic(request.auth));
 
 exports.seedInitialRewards = onCall((request) => seedInitialRewardsLogic(request.auth, request.data));
+
+// Bonus Tasks: a standing library drivers can enroll in anytime (Rescue,
+// Pick up a shift, Train a new employee, Sweep vans, or custom ones a
+// manager adds). Points are only awarded once a manager approves completion.
+exports.createBonusTask = onCall((request) => createBonusTaskLogic(request.auth, request.data, requireRole));
+
+exports.updateBonusTask = onCall((request) => updateBonusTaskLogic(request.auth, request.data, requireRole));
+
+exports.deleteBonusTask = onCall((request) => deleteBonusTaskLogic(request.auth, request.data, requireRole));
+
+exports.enrollInBonusTask = onCall((request) => enrollInBonusTaskLogic(request.auth, request.data));
+
+exports.resolveBonusTask = onCall((request) => resolveBonusTaskLogic(request.auth, request.data, requireRole));
+
+// Manual point add/deduct (reason required) - stand-in for no-call/no-show
+// and similar deductions until the messy Okami sheets can be parsed.
+exports.adjustPoints = onCall((request) => adjustPointsLogic(request.auth, request.data, requireRole));
 
 // Flags roster entries with no Cortex activity in ~3 months for manager
 // review - never auto-deactivates anyone.
