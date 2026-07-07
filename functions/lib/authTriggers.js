@@ -1,16 +1,17 @@
 const functionsV1 = require('firebase-functions/v1');
 const { db, admin } = require('./admin');
-const { getBootstrapAdmin } = require('./adminAllowlist');
+const { getBootstrapRole } = require('./roleAllowlist');
 const { logActivity } = require('./activityLog');
 
 // Fires right after someone creates an account on the login page.
-// The two hardcoded bootstrap admins get the admin role automatically;
-// everyone else starts as a plain associate until a Manager/Admin account
-// promotes them (that promotion flow is a separate, not-yet-built function).
+// Bootstrap admins/managers get their role automatically; everyone else
+// starts as a plain associate. Associates then go through the roster
+// identity-confirmation flow (see roster.js) to link their Cortex point
+// history - this trigger just creates the bare account.
 async function handleUserCreate(user) {
-  const bootstrapAdmin = getBootstrapAdmin(user.email);
-  const role = bootstrapAdmin ? 'admin' : 'associate';
-  const fullName = bootstrapAdmin ? bootstrapAdmin.fullName : (user.displayName || '');
+  const bootstrap = getBootstrapRole(user.email);
+  const role = bootstrap ? bootstrap.role : 'associate';
+  const fullName = bootstrap ? bootstrap.fullName : (user.displayName || '');
 
   await admin.auth().setCustomUserClaims(user.uid, { role });
 

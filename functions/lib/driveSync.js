@@ -1,12 +1,41 @@
 const { google } = require('googleapis');
 const { parse } = require('csv-parse/sync');
 const { db, admin } = require('./admin');
-const { normalizeName } = require('./nameMatching');
 const { logActivity } = require('./activityLog');
 
 // The "Okami Rewards Program" Drive folder that holds the weekly
 // DSP_Overview_Dashboard_OKMI_DCL9_<week>.csv exports from Cortex.
 const DRIVE_FOLDER_ID = '1Fpje-R2b1MoiYnf4_fmBf-PgpLXReD3C';
+
+// Individual Cortex metric scores used to tell a driver what they're doing
+// well and what needs work. A weight-applied of 0 means that metric had no
+// coverage for them that week (e.g. no rental vehicle), so it's excluded.
+const METRICS = [
+  { label: 'Speeding', scoreKey: 'Speeding Event Rate Score', weightKey: 'Speeding Event Rate Weight Applied' },
+  { label: 'Seatbelt Use', scoreKey: 'Seatbelt-Off Rate Score', weightKey: 'Seatbelt-Off Rate Weight Applied' },
+  { label: 'Distracted Driving', scoreKey: 'Distractions Rate Score', weightKey: 'Distractions Rate Weight Applied' },
+  { label: 'Sign/Signal Compliance', scoreKey: 'Sign/ Signal Violations Rate Score', weightKey: 'Sign/ Signal Violations Rate Weight Applied' },
+  { label: 'Following Distance', scoreKey: 'Following Distance Rate Score', weightKey: 'Following Distance Rate Weight Applied' },
+  { label: 'Customer Delivery Feedback', scoreKey: 'CDF DPMO Score', weightKey: 'CDF DPMO Weight Applied' },
+  { label: 'Customer Escalation (CED)', scoreKey: 'CED Score', weightKey: 'CED Weight Applied' },
+  { label: 'Delivery Success (DSB)', scoreKey: 'DSB DPMO Score', weightKey: 'DSB DPMO Weight Applied' },
+  { label: 'Photo on Delivery (POD)', scoreKey: 'POD Score', weightKey: 'POD Weight Applied' },
+  { label: 'Package Sort/Scan (PSB)', scoreKey: 'PSB Score', weightKey: 'PSB Weight Applied' },
+];
+
+function bestAndWorstMetric(row) {
+  const scored = METRICS.map((m) => ({
+    label: m.label,
+    score: parseFloat(row[m.scoreKey]),
+    weight: parseFloat(row[m.weightKey]),
+  })).filter((m) => !Number.isNaN(m.score) && m.weight > 0);
+
+  if (scored.length === 0) return { best: null, worst: null };
+
+  const best = scored.reduce((a, b) => (b.score > a.score ? b : a));
+  const worst = scored.reduce((a, b) => (b.score < a.score ? b : a));
+  return { best: best.label, worst: worst.label };
+}
 
 async function getDriveClient() {
   const auth = new google.auth.GoogleAuth({
@@ -35,9 +64,14 @@ function parseWeekFromFilename(filename) {
   return match ? match[1] : null;
 }
 
-// Reads the newest Cortex CSV, matches each row to an associate by name,
-// and either credits their points or - if the name is ambiguous/unknown -
-// flags it in pendingReview instead of guessing.
+// Reads the newest Cortex CSV and upserts a roster entry per Transporter ID
+// (a stable ID Cortex assigns per person, unlike their name which is
+// formatted inconsistently week to week). Each row also writes a ledger
+// entry under that roster doc. If the roster entry is already linked to a
+// real driver account, their totalPoints is credited immediately; otherwise
+// the points just sit on the roster until someone claims it at signup time
+// (see roster.js) - turnover here is expected to be constant, so there's
+// no separate "known roster" to maintain by hand.
 async function syncCortexFile() {
   const drive = await getDriveClient();
   const file = await findLatestCsv(drive);
@@ -56,57 +90,43 @@ async function syncCortexFile() {
   const csvText = await downloadCsv(drive, file.id);
   const rows = parse(csvText, { columns: true, skip_empty_lines: true, bom: true, trim: true });
 
-  const associatesSnap = await db.collection('users').where('role', '==', 'associate').get();
-  const associates = associatesSnap.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-    nameNormalized: normalizeName(doc.data().fullName),
-  }));
-
   const batch = db.batch();
-  let matchedCount = 0;
-  let flaggedCount = 0;
+  let rosterUpdates = 0;
 
   for (const row of rows) {
+    const transporterId = (row['Transporter ID'] || '').trim();
     const rawName = (row['Delivery Associate'] || '').trim();
     const standing = row['Overall Standing'];
     const score = parseFloat(row['Overall Score']);
-    if (!rawName || Number.isNaN(score)) continue;
+    if (!transporterId || !rawName || Number.isNaN(score)) continue;
 
-    const normalized = normalizeName(rawName);
-    const matches = associates.filter((a) => a.nameNormalized === normalized);
+    const { best, worst } = bestAndWorstMetric(row);
+    const rosterRef = db.collection('roster').doc(transporterId);
+    const ledgerRef = rosterRef.collection('ledger').doc(week);
 
-    if (matches.length === 1) {
-      const user = matches[0];
-      const ledgerRef = db.collection('users').doc(user.id).collection('pointsLedger').doc(week);
-      batch.set(ledgerRef, {
-        week,
-        points: score,
-        standing,
-        source: 'cortex-sync',
-        rawName,
-        createdAt: admin.firestore.Timestamp.now(),
-      });
-      batch.update(db.collection('users').doc(user.id), {
-        totalPoints: admin.firestore.FieldValue.increment(score),
-      });
-      matchedCount += 1;
-    } else {
-      // Zero matches (unknown name) or multiple matches (ambiguous) both
-      // go to pendingReview rather than being auto-resolved.
-      const reviewRef = db.collection('pendingReview').doc();
-      batch.set(reviewRef, {
-        type: 'unmatchedName',
-        week,
-        rawName,
-        standing,
-        score,
-        candidateUserIds: matches.map((m) => m.id),
-        status: 'open',
-        createdAt: admin.firestore.Timestamp.now(),
-      });
-      flaggedCount += 1;
-    }
+    batch.set(ledgerRef, {
+      week,
+      points: score,
+      standing,
+      bestMetric: best,
+      worstMetric: worst,
+      rawName,
+      source: 'cortex-sync',
+      createdAt: admin.firestore.Timestamp.now(),
+    });
+    batch.set(
+      rosterRef,
+      {
+        transporterId,
+        cortexFullName: rawName,
+        active: true,
+        lastSeenWeek: week,
+        updatedAt: admin.firestore.Timestamp.now(),
+      },
+      { merge: true }
+    );
+
+    rosterUpdates += 1;
   }
 
   batch.set(importRef, {
@@ -114,11 +134,25 @@ async function syncCortexFile() {
     fileId: file.id,
     fileName: file.name,
     importedAt: admin.firestore.Timestamp.now(),
-    matchedCount,
-    flaggedCount,
+    rosterUpdates,
   });
-
   await batch.commit();
+
+  // Credit points immediately for any roster entries already linked to a
+  // real account from a previous signup confirmation.
+  const linkedRosterSnap = await db.collection('roster').where('linkedUserId', '!=', null).get();
+  const linkBatch = db.batch();
+  let linkedUpdates = 0;
+  for (const doc of linkedRosterSnap.docs) {
+    const roster = doc.data();
+    const ledgerSnap = await doc.ref.collection('ledger').doc(week).get();
+    if (!ledgerSnap.exists) continue;
+    linkBatch.update(db.collection('users').doc(roster.linkedUserId), {
+      totalPoints: admin.firestore.FieldValue.increment(ledgerSnap.data().points),
+    });
+    linkedUpdates += 1;
+  }
+  await linkBatch.commit();
 
   await logActivity({
     actorId: 'system',
@@ -127,29 +161,10 @@ async function syncCortexFile() {
     action: 'cortex_import',
     targetType: 'cortexImports',
     targetId: week,
-    details: { matchedCount, flaggedCount, fileName: file.name },
+    details: { fileName: file.name, rosterUpdates, linkedUpdates },
   });
 
-  if (flaggedCount > 0) {
-    await notifyManagersOfPendingReview(flaggedCount, week);
-  }
-
-  return { week, matchedCount, flaggedCount };
-}
-
-async function notifyManagersOfPendingReview(count, week) {
-  const managersSnap = await db.collection('users').where('role', 'in', ['manager', 'admin']).get();
-  const batch = db.batch();
-  managersSnap.docs.forEach((doc) => {
-    const notifRef = db.collection('users').doc(doc.id).collection('notifications').doc();
-    batch.set(notifRef, {
-      type: 'pendingReview',
-      message: `${count} name(s) from the Week ${week} Cortex import need review.`,
-      read: false,
-      createdAt: admin.firestore.Timestamp.now(),
-    });
-  });
-  await batch.commit();
+  return { week, rosterUpdates, linkedUpdates };
 }
 
 module.exports = { syncCortexFile };

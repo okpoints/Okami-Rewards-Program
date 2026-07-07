@@ -3,8 +3,11 @@ const { onCall } = require('firebase-functions/v2/https');
 const { db, admin } = require('./lib/admin');
 const { syncCortexFile } = require('./lib/driveSync');
 const { onUserCreate } = require('./lib/authTriggers');
-const { resolvePendingReviewLogic } = require('./lib/pendingReview');
 const { requestRedemptionLogic, resolveRedemptionLogic } = require('./lib/redemptions');
+const { findRosterCandidatesLogic, requestIdentityLinkLogic, resolveIdentityLinkLogic } = require('./lib/roster');
+const { seedInitialRewardsLogic } = require('./lib/rewardsSeed');
+const { scanForInactiveDrivers } = require('./lib/inactivityScan');
+const { requireRole } = require('./lib/roles');
 
 exports.onUserCreate = onUserCreate;
 
@@ -23,11 +26,32 @@ exports.weeklyCortexSync = onSchedule(
   }
 );
 
-exports.resolvePendingReview = onCall((request) => resolvePendingReviewLogic(request.auth, request.data));
+// The "Sync Now" button - same logic as the scheduled job, manager/admin triggered.
+exports.manualCortexSync = onCall(async (request) => {
+  requireRole(request.auth, ['manager', 'admin']);
+  return syncCortexFile();
+});
 
 exports.requestRedemption = onCall((request) => requestRedemptionLogic(request.auth, request.data));
 
 exports.resolveRedemption = onCall((request) => resolveRedemptionLogic(request.auth, request.data));
+
+// Signup identity flow: driver types their name, we suggest Cortex roster
+// matches, they self-attest, then a manager/admin gives the final approval.
+exports.findRosterCandidates = onCall((request) => findRosterCandidatesLogic(request.auth, request.data));
+
+exports.requestIdentityLink = onCall((request) => requestIdentityLinkLogic(request.auth, request.data));
+
+exports.resolveIdentityLink = onCall((request) => resolveIdentityLinkLogic(request.auth, request.data, requireRole));
+
+exports.seedInitialRewards = onCall((request) => seedInitialRewardsLogic(request.auth, request.data));
+
+// Flags roster entries with no Cortex activity in ~3 months for manager
+// review - never auto-deactivates anyone.
+exports.inactivityScan = onSchedule('1 of month 06:00', async () => {
+  const result = await scanForInactiveDrivers();
+  console.log('Inactivity scan result:', result);
+});
 
 // Hard-deletes activity log entries older than 1 year (they're already
 // hidden from the default UI view after 6 months on the client side).

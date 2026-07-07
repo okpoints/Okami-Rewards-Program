@@ -26,11 +26,6 @@ service cloud.firestore {
                     && request.resource.data.diff(resource.data).affectedKeys()
                         .hasOnly(['phone', 'notificationPreferences']);
 
-      match /pointsLedger/{week} {
-        allow read: if isSignedIn() && (request.auth.uid == userId || isManagerOrAdmin());
-        allow write: if false; // written only by the Cortex sync / review-resolution functions
-      }
-
       match /notifications/{notifId} {
         allow read: if isSignedIn() && request.auth.uid == userId;
         allow update: if isSignedIn() && request.auth.uid == userId
@@ -52,6 +47,18 @@ service cloud.firestore {
     match /pendingReview/{reviewId} {
       allow read: if isManagerOrAdmin();
       allow write: if false; // Cloud Functions only
+    }
+
+    match /roster/{rosterId} {
+      allow read: if isManagerOrAdmin() || (isSignedIn() && resource.data.linkedUserId == request.auth.uid);
+      allow write: if false; // Cloud Functions only
+
+      match /ledger/{week} {
+        allow read: if isManagerOrAdmin()
+                    || (isSignedIn() &&
+                        get(/databases/$(database)/documents/roster/$(rosterId)).data.linkedUserId == request.auth.uid);
+        allow write: if false; // Cloud Functions only
+      }
     }
 
     match /cortexImports/{importId} {
