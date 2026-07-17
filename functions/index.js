@@ -25,6 +25,17 @@ const {
 const { adjustPointsLogic } = require('./lib/pointAdjustments');
 const { setManagerPermissionLogic } = require('./lib/permissions');
 const { queryActivityLogLogic } = require('./lib/activityLogQuery');
+const {
+  createAnnouncementLogic,
+  updateAnnouncementLogic,
+  deleteAnnouncementLogic,
+  enrollInAnnouncementLogic,
+  confirmAnnouncementParticipantLogic,
+  resolveAnnouncementCompletionLogic,
+  listAnnouncementEnrollmentsLogic,
+  listAnnouncementHistoryLogic,
+  seedInitialAnnouncementLogic,
+} = require('./lib/announcements');
 const { requireRole } = require('./lib/roles');
 
 exports.onUserCreate = onUserCreate;
@@ -101,6 +112,38 @@ exports.setManagerPermission = onCall((request) => setManagerPermissionLogic(req
 // The sanctioned way to browse the activity log - see firestore.rules for
 // why direct client reads are admin-only.
 exports.queryActivityLog = onCall((request) => queryActivityLogLogic(request.auth, request.data));
+
+// Area of Highest Need: one urgent, ad-hoc announcement at a time (unlike
+// Bonus Tasks' standing library). Drivers only ever see the headcount
+// needed, never who else enrolled - a manager/admin sees the real list and
+// confirms who's actually doing it before completion can be approved.
+exports.createAnnouncement = onCall((request) => createAnnouncementLogic(request.auth, request.data, requireRole));
+
+exports.updateAnnouncement = onCall((request) => updateAnnouncementLogic(request.auth, request.data, requireRole));
+
+exports.deleteAnnouncement = onCall((request) => deleteAnnouncementLogic(request.auth, request.data, requireRole));
+
+exports.enrollInAnnouncement = onCall((request) => enrollInAnnouncementLogic(request.auth, request.data));
+
+exports.confirmAnnouncementParticipant = onCall((request) =>
+  confirmAnnouncementParticipantLogic(request.auth, request.data, requireRole)
+);
+
+exports.resolveAnnouncementCompletion = onCall((request) =>
+  resolveAnnouncementCompletionLogic(request.auth, request.data, requireRole)
+);
+
+exports.listAnnouncementEnrollments = onCall((request) =>
+  listAnnouncementEnrollmentsLogic(request.auth, request.data, requireRole)
+);
+
+exports.listAnnouncementHistory = onCall((request) =>
+  listAnnouncementHistoryLogic(request.auth, request.data, requireRole)
+);
+
+exports.seedInitialAnnouncement = onCall((request) =>
+  seedInitialAnnouncementLogic(request.auth, request.data, requireRole)
+);
 
 // Flags roster entries with no Cortex activity in ~3 months for manager
 // review - never auto-deactivates anyone.

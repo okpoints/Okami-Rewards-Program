@@ -22,10 +22,10 @@ const INITIAL_REWARDS = [
   { name: 'Custom Reward (up to $1,000)', pointCost: 10000 },
 ];
 
-// Admin-only, and a no-op if rewards already exist - safe to call more than
-// once (e.g. by accident) without duplicating the catalog.
+// Manager or admin, and a no-op if rewards already exist - safe to call
+// more than once (e.g. by accident) without duplicating the catalog.
 async function seedInitialRewardsLogic(auth, data) {
-  requireRole(auth, ['admin']);
+  requireRole(auth, ['manager', 'admin']);
 
   const existing = await db.collection('rewards').limit(1).get();
   if (!existing.empty) {

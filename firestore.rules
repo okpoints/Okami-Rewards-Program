@@ -36,7 +36,7 @@ service cloud.firestore {
 
     match /rewards/{rewardId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow write: if isManagerOrAdmin();
     }
 
     match /redemptionRequests/{requestId} {
@@ -68,6 +68,18 @@ service cloud.firestore {
 
     match /bonusTasks/{taskId} {
       allow read: if isSignedIn(); // everyone can browse the task library
+      allow write: if false; // Cloud Functions only
+
+      match /enrollments/{userId} {
+        allow read: if isSignedIn() && (request.auth.uid == userId || isManagerOrAdmin());
+        allow write: if false; // Cloud Functions only
+      }
+    }
+
+    match /announcements/{announcementId} {
+      // Headcount needed, point value, etc. are visible to everyone -
+      // enrollment counts/lists are NOT here, see the enrollments subcollection.
+      allow read: if isSignedIn();
       allow write: if false; // Cloud Functions only
 
       match /enrollments/{userId} {
