@@ -17,14 +17,6 @@ export default function App() {
     return <AuthPage onSignupComplete={(fullName) => setJustSignedUp(fullName)} />;
   }
 
-  if (justSignedUp !== null) {
-    return (
-      <div className="auth-screen">
-        <IdentityCheckStep suggestedName={justSignedUp} onDone={() => setJustSignedUp(null)} />
-      </div>
-    );
-  }
-
   if (!role) {
     return (
       <div className="auth-screen">
@@ -32,6 +24,17 @@ export default function App() {
           <h1>Setting up your account...</h1>
           <p className="subtitle">This only takes a moment. Try refreshing if it's been more than a minute.</p>
         </div>
+      </div>
+    );
+  }
+
+  // Only associates need the Cortex identity check - admins/managers are
+  // recognized straight from the bootstrap allowlist and never earn
+  // Cortex points themselves.
+  if (justSignedUp !== null && role === 'associate') {
+    return (
+      <div className="auth-screen">
+        <IdentityCheckStep suggestedName={justSignedUp} onDone={() => setJustSignedUp(null)} />
       </div>
     );
   }
