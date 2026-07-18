@@ -55,8 +55,10 @@ exports.weeklyCortexSync = onSchedule(
   }
 );
 
-// The "Sync Now" button - same logic as the scheduled job, manager/admin triggered.
-exports.manualCortexSync = onCall(async (request) => {
+// The "Sync Now" button - same logic as the scheduled job, manager/admin
+// triggered. Needs the same Drive-access service account as the scheduled
+// version, or it would run as the default compute identity and fail.
+exports.manualCortexSync = onCall({ serviceAccount: DRIVE_SERVICE_ACCOUNT }, async (request) => {
   requireRole(request.auth, ['manager', 'admin']);
   return syncCortexFile();
 });
