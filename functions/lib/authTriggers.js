@@ -2,6 +2,7 @@ const functionsV1 = require('firebase-functions/v1');
 const { db, admin } = require('./admin');
 const { getBootstrapRole } = require('./roleAllowlist');
 const { logActivity } = require('./activityLog');
+const { FIREBASE_ADMIN_SERVICE_ACCOUNT } = require('./serviceAccount');
 
 // Fires right after someone creates an account on the login page.
 // Bootstrap admins/managers get their role automatically; everyone else
@@ -35,6 +36,12 @@ async function handleUserCreate(user) {
   });
 }
 
-const onUserCreate = functionsV1.auth.user().onCreate(handleUserCreate);
+// setCustomUserClaims needs Firebase Auth Admin permissions the default
+// runtime identity doesn't have - run this as the Firebase Admin SDK
+// service account instead, which already has them.
+const onUserCreate = functionsV1
+  .runWith({ serviceAccount: FIREBASE_ADMIN_SERVICE_ACCOUNT })
+  .auth.user()
+  .onCreate(handleUserCreate);
 
 module.exports = { onUserCreate, handleUserCreate };

@@ -37,11 +37,9 @@ const {
   seedInitialAnnouncementLogic,
 } = require('./lib/announcements');
 const { requireRole } = require('./lib/roles');
+const { FIREBASE_ADMIN_SERVICE_ACCOUNT: DRIVE_SERVICE_ACCOUNT } = require('./lib/serviceAccount');
 
 exports.onUserCreate = onUserCreate;
-
-// Must have Viewer access to the "Okami Rewards Program" Drive folder.
-const DRIVE_SERVICE_ACCOUNT = 'firebase-adminsdk-fbsvc@okami-rewards-program-8e577.iam.gserviceaccount.com';
 
 exports.weeklyCortexSync = onSchedule(
   {
