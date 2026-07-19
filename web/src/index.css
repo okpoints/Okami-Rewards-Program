@@ -288,6 +288,26 @@ input {
   outline-offset: 1px;
 }
 
+.password-field {
+  position: relative;
+}
+
+.password-field input {
+  padding-right: 40px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  font-size: 16px;
+  padding: 6px 8px;
+  line-height: 1;
+}
+
 .error-text {
   color: #b3261e;
   font-size: 13px;
