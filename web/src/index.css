@@ -210,10 +210,36 @@ input {
 .auth-screen {
   min-height: 100vh;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 24px;
   background: var(--color-navy);
   padding: 20px;
+}
+
+.auth-hero {
+  text-align: center;
+  max-width: 420px;
+}
+
+.auth-hero-title {
+  color: var(--color-white);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.auth-hero-tagline {
+  color: var(--color-white);
+  font-size: 15px;
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
+/* Reusable neon-yellow pop of color for emphasis anywhere in the app. */
+.accent-text {
+  color: var(--color-accent);
+  font-weight: 700;
 }
 
 .auth-card {

@@ -143,12 +143,19 @@ export default function AuthPage({ onSignupComplete }) {
 
   return (
     <div className="auth-screen">
+      <div className="auth-hero">
+        <div className="auth-hero-title">
+          <span role="img" aria-hidden="true">🚚</span> Okami Rewards Program
+        </div>
+        <p className="auth-hero-tagline">
+          Turn your excellent performance into <span className="accent-text">amazing rewards</span>
+        </p>
+      </div>
       <div className="auth-card">
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
           <Logo />
         </div>
         <h1>{mode === 'login' ? 'Welcome back' : 'Create your account'}</h1>
-        <p className="subtitle">Okami Rewards Program</p>
         <form onSubmit={handleSubmit}>
           {mode === 'signup' && (
             <div className="field">
