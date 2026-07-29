@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  sendPasswordResetEmail,
   updateProfile,
 } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
@@ -122,6 +123,7 @@ export default function AuthPage({ onSignupComplete }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -135,6 +137,23 @@ export default function AuthPage({ onSignupComplete }) {
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleForgotPassword() {
+    if (!email) {
+      setError('Enter your email above first, then click "Forgot password?"');
+      return;
+    }
+    setError('');
+    setBusy(true);
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setResetSent(true);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -189,6 +208,18 @@ export default function AuthPage({ onSignupComplete }) {
               </button>
             </div>
           </div>
+          {mode === 'login' && (
+            <div style={{ textAlign: 'right', marginBottom: 14, marginTop: -6 }}>
+              <button type="button" className="toggle-link" onClick={handleForgotPassword} disabled={busy}>
+                Forgot password?
+              </button>
+            </div>
+          )}
+          {resetSent && (
+            <p className="muted" style={{ marginBottom: 14 }}>
+              Check your email for a link to reset your password.
+            </p>
+          )}
           {error && <p className="error-text">{error}</p>}
           <button className="btn btn-primary" type="submit" disabled={busy} style={{ width: '100%' }}>
             {busy ? 'Please wait...' : mode === 'login' ? 'Log in' : 'Sign up'}
@@ -196,7 +227,14 @@ export default function AuthPage({ onSignupComplete }) {
         </form>
         <p className="muted" style={{ marginTop: 16, textAlign: 'center' }}>
           {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
-          <button className="toggle-link" onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}>
+          <button
+            className="toggle-link"
+            onClick={() => {
+              setMode(mode === 'login' ? 'signup' : 'login');
+              setResetSent(false);
+              setError('');
+            }}
+          >
             {mode === 'login' ? 'Sign up' : 'Log in'}
           </button>
         </p>
