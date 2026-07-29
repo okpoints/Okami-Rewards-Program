@@ -10,6 +10,7 @@
   --color-gray-500: #8b95a1;
   --color-gray-700: #4b5563;
   --color-accent: #f4e300;
+  --color-accent-green: #39ff14;
   --radius: 10px;
   --shadow: 0 1px 3px rgba(11, 37, 69, 0.1), 0 1px 2px rgba(11, 37, 69, 0.06);
 
@@ -236,9 +237,15 @@ input {
   line-height: 1.4;
 }
 
-/* Reusable neon-yellow pop of color for emphasis anywhere in the app. */
+/* Reusable neon-yellow pop of color - reserved for points/achievements per branding. */
 .accent-text {
   color: var(--color-accent);
+  font-weight: 700;
+}
+
+/* Reusable neon-green pop of color for taglines, confirmations, and other fun highlights. */
+.accent-text-green {
+  color: var(--color-accent-green);
   font-weight: 700;
 }
 

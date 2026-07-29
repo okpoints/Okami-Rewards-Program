@@ -174,7 +174,7 @@ export default function AuthPage({ onSignupComplete }) {
           <span role="img" aria-hidden="true">🚚</span> Okami Rewards Program
         </div>
         <p className="auth-hero-tagline">
-          Turn your excellent performance into <span className="accent-text">amazing rewards</span>
+          Turn your excellent performance into <span className="accent-text-green">amazing rewards</span>
         </p>
       </div>
       <div className="auth-card">
@@ -222,7 +222,7 @@ export default function AuthPage({ onSignupComplete }) {
             </div>
           )}
           {resetSent && (
-            <p className="muted" style={{ marginBottom: 14 }}>
+            <p className="accent-text-green" style={{ marginBottom: 14, fontSize: 14 }}>
               Check your email for a link to reset your password - don't forget to check your spam/junk folder too.
             </p>
           )}
