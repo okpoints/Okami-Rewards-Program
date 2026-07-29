@@ -223,7 +223,7 @@ export default function AuthPage({ onSignupComplete }) {
           )}
           {resetSent && (
             <p className="muted" style={{ marginBottom: 14 }}>
-              Check your email for a link to reset your password.
+              Check your email for a link to reset your password - don't forget to check your spam/junk folder too.
             </p>
           )}
           {alreadyHasAccount && (
