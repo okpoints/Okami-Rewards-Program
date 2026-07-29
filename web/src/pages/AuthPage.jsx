@@ -124,10 +124,12 @@ export default function AuthPage({ onSignupComplete }) {
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  const [alreadyHasAccount, setAlreadyHasAccount] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    setAlreadyHasAccount(false);
     setBusy(true);
     try {
       if (mode === 'signup') {
@@ -138,7 +140,11 @@ export default function AuthPage({ onSignupComplete }) {
         await signInWithEmailAndPassword(auth, email, password);
       }
     } catch (err) {
-      setError(err.message);
+      if (err.code === 'auth/email-already-in-use') {
+        setAlreadyHasAccount(true);
+      } else {
+        setError(err.message);
+      }
     } finally {
       setBusy(false);
     }
@@ -220,6 +226,23 @@ export default function AuthPage({ onSignupComplete }) {
               Check your email for a link to reset your password.
             </p>
           )}
+          {alreadyHasAccount && (
+            <p className="muted" style={{ marginBottom: 14 }}>
+              Looks like there's already an account with this email.{' '}
+              <button
+                type="button"
+                className="toggle-link"
+                onClick={() => {
+                  setMode('login');
+                  setAlreadyHasAccount(false);
+                  setError('');
+                }}
+              >
+                Log in instead
+              </button>
+              , or use "Forgot password?" if you don't remember it.
+            </p>
+          )}
           {error && <p className="error-text">{error}</p>}
           <button className="btn btn-primary" type="submit" disabled={busy} style={{ width: '100%' }}>
             {busy ? 'Please wait...' : mode === 'login' ? 'Log in' : 'Sign up'}
@@ -232,6 +255,7 @@ export default function AuthPage({ onSignupComplete }) {
             onClick={() => {
               setMode(mode === 'login' ? 'signup' : 'login');
               setResetSent(false);
+              setAlreadyHasAccount(false);
               setError('');
             }}
           >
