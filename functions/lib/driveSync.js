@@ -149,6 +149,7 @@ async function syncCortexFile() {
     if (!ledgerSnap.exists) continue;
     linkBatch.update(db.collection('users').doc(roster.linkedUserId), {
       totalPoints: admin.firestore.FieldValue.increment(ledgerSnap.data().points),
+      currentStanding: ledgerSnap.data().standing,
     });
     linkedUpdates += 1;
   }

@@ -3,6 +3,10 @@ const { db, admin } = require('./admin');
 const { logActivity } = require('./activityLog');
 const { requireRole } = require('./roles');
 
+// Per the original spec: drivers can only redeem prizes once they've
+// reached Gold or Platinum standing (their most recent Cortex tier).
+const REDEMPTION_ELIGIBLE_STANDINGS = ['Gold', 'Platinum'];
+
 // An associate spends points on a reward. This only ever creates a pending
 // request - approval/rejection happens in resolveRedemptionLogic below.
 async function requestRedemptionLogic(auth, data) {
@@ -25,6 +29,9 @@ async function requestRedemptionLogic(auth, data) {
     }
     const user = userSnap.data();
     const reward = rewardSnap.data();
+    if (!REDEMPTION_ELIGIBLE_STANDINGS.includes(user.currentStanding)) {
+      throw new HttpsError('failed-precondition', 'Reach Gold or Platinum standing to redeem rewards.');
+    }
     if ((user.totalPoints || 0) < reward.pointCost) {
       throw new HttpsError('failed-precondition', 'Not enough points for this reward.');
     }
@@ -37,6 +44,15 @@ async function requestRedemptionLogic(auth, data) {
       status: 'pending',
       requestedAt: admin.firestore.Timestamp.now(),
     });
+  });
+
+  // Confirms the submission itself - separate from the later approve/deny
+  // notification sent in resolveRedemptionLogic below.
+  await db.collection('users').doc(auth.uid).collection('notifications').add({
+    type: 'redemption',
+    message: 'Your redemption request was submitted and is awaiting manager approval.',
+    read: false,
+    createdAt: admin.firestore.Timestamp.now(),
   });
 
   await logActivity({
@@ -62,6 +78,7 @@ async function resolveRedemptionLogic(auth, data) {
   }
 
   const requestRef = db.collection('redemptionRequests').doc(requestId);
+  let resolvedRequest;
 
   await db.runTransaction(async (tx) => {
     const reqSnap = await tx.get(requestRef);
@@ -72,6 +89,7 @@ async function resolveRedemptionLogic(auth, data) {
     if (reqData.status !== 'pending') {
       throw new HttpsError('failed-precondition', 'This request has already been resolved.');
     }
+    resolvedRequest = reqData;
 
     if (decision === 'approved') {
       const userRef = db.collection('users').doc(reqData.userId);
@@ -83,6 +101,15 @@ async function resolveRedemptionLogic(auth, data) {
       resolvedBy: auth.uid,
       resolvedAt: admin.firestore.Timestamp.now(),
     });
+  });
+
+  await db.collection('users').doc(resolvedRequest.userId).collection('notifications').add({
+    type: 'redemption',
+    message: decision === 'approved'
+      ? `Your redemption for "${resolvedRequest.rewardName}" was approved!`
+      : `Your redemption for "${resolvedRequest.rewardName}" was not approved.`,
+    read: false,
+    createdAt: admin.firestore.Timestamp.now(),
   });
 
   await logActivity({

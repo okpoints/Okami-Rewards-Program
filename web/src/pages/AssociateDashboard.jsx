@@ -5,15 +5,47 @@ import { db, functions } from '../firebase';
 
 const requestRedemption = httpsCallable(functions, 'requestRedemption');
 
+const REDEMPTION_ELIGIBLE_STANDINGS = ['Gold', 'Platinum'];
+
+const REWARD_ICON_RULES = [
+  [/mug|cup/i, '☕'],
+  [/tumbler|bottle|thermos/i, '🥤'],
+  [/gift ?card/i, '💳'],
+  [/fire ?stick|tv|streaming/i, '📺'],
+  [/headphone|earbud|audio/i, '🎧'],
+  [/backpack|bag/i, '🎒'],
+  [/roomba|vacuum|robot/i, '🤖'],
+  [/trip|vacation|disney|flight|travel/i, '✈️'],
+  [/watch/i, '⌚'],
+  [/shirt|hoodie|jacket|apparel|hat/i, '👕'],
+  [/game|xbox|playstation|nintendo/i, '🎮'],
+  [/gift ?basket|snack|food/i, '🎁'],
+];
+
+function rewardIcon(name) {
+  const match = REWARD_ICON_RULES.find(([pattern]) => pattern.test(name || ''));
+  return match ? match[1] : '🎁';
+}
+
 function StatusBadge({ status }) {
   const className = status === 'approved' ? 'badge-approved' : status === 'rejected' ? 'badge-denied' : 'badge-pending';
   return <span className={`badge ${className}`}>{status}</span>;
+}
+
+function toDate(value) {
+  return value?.toDate ? value.toDate() : new Date(value);
+}
+
+function formatDate(value) {
+  return toDate(value).toLocaleDateString();
 }
 
 export default function AssociateDashboard({ user }) {
   const [profile, setProfile] = useState(null);
   const [rewards, setRewards] = useState([]);
   const [myRequests, setMyRequests] = useState([]);
+  const [ledgerEntries, setLedgerEntries] = useState([]);
+  const [adjustments, setAdjustments] = useState([]);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -35,12 +67,31 @@ export default function AssociateDashboard({ user }) {
       setMyRequests(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
 
+    const adjustmentsQuery = query(collection(db, 'pointAdjustments'), where('userId', '==', user.uid));
+    const unsubAdjustments = onSnapshot(adjustmentsQuery, (snap) => {
+      setAdjustments(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+
     return () => {
       unsubProfile();
       unsubRewards();
       unsubRequests();
+      unsubAdjustments();
     };
   }, [user.uid]);
+
+  // Weekly Cortex points live under the roster entry, once linked.
+  useEffect(() => {
+    if (!profile?.rosterId) {
+      setLedgerEntries([]);
+      return undefined;
+    }
+    const ledgerQuery = collection(db, 'roster', profile.rosterId, 'ledger');
+    const unsub = onSnapshot(ledgerQuery, (snap) => {
+      setLedgerEntries(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return unsub;
+  }, [profile?.rosterId]);
 
   async function handleRedeem(rewardId) {
     setMessage('');
@@ -53,18 +104,71 @@ export default function AssociateDashboard({ user }) {
   }
 
   const totalPoints = profile?.totalPoints ?? 0;
+  const isTierEligible = REDEMPTION_ELIGIBLE_STANDINGS.includes(profile?.currentStanding);
+  const approvedRedemptions = myRequests.filter((r) => r.status === 'approved');
+  const lifetimeRedeemed = approvedRedemptions.reduce((sum, r) => sum + (r.pointCost || 0), 0);
+  const lifetimeEarned = totalPoints + lifetimeRedeemed;
+
+  const nextReward = rewards
+    .filter((r) => r.pointCost > totalPoints)
+    .sort((a, b) => a.pointCost - b.pointCost)[0];
+  const progressPct = nextReward ? Math.min(100, Math.round((totalPoints / nextReward.pointCost) * 100)) : 100;
+
+  const transactions = [
+    ...ledgerEntries.map((e) => ({
+      id: `ledger-${e.id}`,
+      date: e.createdAt,
+      description: `Cortex week ${e.week} (${e.standing})`,
+      points: e.points,
+    })),
+    ...adjustments.map((a) => ({
+      id: `adj-${a.id}`,
+      date: a.createdAt,
+      description: a.reason,
+      points: a.delta,
+    })),
+    ...approvedRedemptions.map((r) => ({
+      id: `redeem-${r.id}`,
+      date: r.resolvedAt || r.requestedAt,
+      description: `Redeemed: ${r.rewardName}`,
+      points: -r.pointCost,
+    })),
+  ].sort((a, b) => toDate(b.date) - toDate(a.date));
 
   return (
     <div>
       <div className="card">
         <h2>Your points</h2>
-        <p style={{ fontSize: 28, margin: '4px 0' }}>
-          <span className="points-highlight">{totalPoints} pts</span>
-        </p>
+        <div className="points-hero">
+          <div className="points-hero-stat total">
+            <div className="stat-label">Total Available</div>
+            <div className="stat-value">{totalPoints}</div>
+          </div>
+          <div className="points-hero-stat">
+            <div className="stat-label">Lifetime Earned</div>
+            <div className="stat-value">{lifetimeEarned}</div>
+          </div>
+          <div className="points-hero-stat">
+            <div className="stat-label">Lifetime Redeemed</div>
+            <div className="stat-value">{lifetimeRedeemed}</div>
+          </div>
+        </div>
+
+        {nextReward && (
+          <div style={{ marginTop: 16 }}>
+            <div className="progress-track">
+              <div className="progress-fill" style={{ width: `${progressPct}%` }} />
+            </div>
+            <p className="progress-callout">
+              You're only {nextReward.pointCost - totalPoints} points away from redeeming {nextReward.name}!
+            </p>
+          </div>
+        )}
+
         {profile?.rosterId ? (
-          <p className="muted">Linked to your Cortex history.</p>
+          <p className="muted" style={{ marginTop: 12 }}>Linked to your Cortex history.</p>
         ) : (
-          <p className="muted">Not yet linked to Cortex history - a manager needs to confirm your identity.</p>
+          <p className="muted" style={{ marginTop: 12 }}>Not yet linked to Cortex history - a manager needs to confirm your identity.</p>
         )}
       </div>
 
@@ -72,23 +176,42 @@ export default function AssociateDashboard({ user }) {
 
       <div className="card">
         <h2>Rewards marketplace</h2>
+        {!isTierEligible && (
+          <p className="progress-callout" style={{ marginBottom: 12 }}>
+            🔒 Catalog locked - reach Gold standing to redeem prizes!
+          </p>
+        )}
         <div className="grid">
-          {rewards.map((reward) => (
-            <div className="reward-card" key={reward.id}>
-              <div className="reward-image">
-                {reward.imageUrl ? <img src={reward.imageUrl} alt={reward.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 10 }} /> : 'No image yet'}
+          {rewards.map((reward) => {
+            const canAfford = totalPoints >= reward.pointCost;
+            const locked = !isTierEligible;
+            return (
+              <div className={`reward-card${locked ? ' reward-card-locked' : ''}`} key={reward.id}>
+                <div className="reward-image">
+                  {reward.imageUrl ? (
+                    <img src={reward.imageUrl} alt={reward.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 10 }} />
+                  ) : (
+                    <span className="reward-icon">{rewardIcon(reward.name)}</span>
+                  )}
+                </div>
+                <div className="reward-name">{reward.name}</div>
+                <div className="reward-cost">{reward.pointCost} pts</div>
+                {locked ? (
+                  <button className="btn btn-outline" disabled>
+                    🔒 Unlock at Gold Level
+                  </button>
+                ) : (
+                  <button
+                    className="btn btn-primary"
+                    disabled={!canAfford}
+                    onClick={() => handleRedeem(reward.id)}
+                  >
+                    Redeem
+                  </button>
+                )}
               </div>
-              <div className="reward-name">{reward.name}</div>
-              <div className="reward-cost">{reward.pointCost} pts</div>
-              <button
-                className="btn btn-primary"
-                disabled={totalPoints < reward.pointCost}
-                onClick={() => handleRedeem(reward.id)}
-              >
-                Redeem
-              </button>
-            </div>
-          ))}
+            );
+          })}
           {rewards.length === 0 && <p className="muted">No rewards available yet.</p>}
         </div>
       </div>
@@ -100,6 +223,20 @@ export default function AssociateDashboard({ user }) {
           <div className="list-row" key={req.id}>
             <span>{req.rewardName} - {req.pointCost} pts</span>
             <StatusBadge status={req.status} />
+          </div>
+        ))}
+      </div>
+
+      <div className="card">
+        <h2>Points transaction history</h2>
+        {transactions.length === 0 && <p className="muted">Nothing yet.</p>}
+        {transactions.map((t) => (
+          <div className="transaction-row" key={t.id}>
+            <span className="transaction-date">{formatDate(t.date)}</span>
+            <span className="transaction-desc">{t.description}</span>
+            <span className={`transaction-points ${t.points >= 0 ? 'positive' : 'negative'}`}>
+              {t.points >= 0 ? '+' : ''}{t.points} pts
+            </span>
           </div>
         ))}
       </div>

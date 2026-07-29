@@ -1,21 +1,23 @@
 :root {
   --color-white: #ffffff;
+  --color-bg: #0a0f1e;
+  --color-surface: #121b2f;
+  --color-surface-alt: #1a2540;
+  --color-border: rgba(255, 255, 255, 0.08);
   --color-navy: #0b2545;
-  --color-navy-dark: #071a33;
-  --color-light-blue: #4a90d9;
-  --color-light-blue-soft: #eaf3fc;
-  --color-gray-50: #f7f8fa;
-  --color-gray-100: #eceef1;
-  --color-gray-300: #c7cdd4;
-  --color-gray-500: #8b95a1;
-  --color-gray-700: #4b5563;
+  --color-text: #f1f4f9;
+  --color-text-muted: #8b96ab;
+  --color-light-blue: #5aa8f5;
+  --color-light-blue-soft: rgba(90, 168, 245, 0.12);
+  --color-gray-300: #2a3550;
   --color-accent: #f4e300;
   --color-accent-green: #39ff14;
+  --color-danger: #ff6b6b;
   --radius: 10px;
-  --shadow: 0 1px 3px rgba(11, 37, 69, 0.1), 0 1px 2px rgba(11, 37, 69, 0.06);
+  --shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 * {
@@ -24,8 +26,8 @@
 
 body {
   margin: 0;
-  background: var(--color-gray-50);
-  color: var(--color-navy);
+  background: var(--color-bg);
+  color: var(--color-text);
 }
 
 button {
@@ -44,8 +46,9 @@ input {
 }
 
 .topbar {
-  background: var(--color-navy);
-  color: var(--color-white);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
   padding: 14px 20px;
   display: flex;
   align-items: center;
@@ -63,7 +66,7 @@ input {
   height: 32px;
   border-radius: 50%;
   background: var(--color-light-blue);
-  color: var(--color-white);
+  color: var(--color-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -81,6 +84,7 @@ input {
   align-items: center;
   gap: 12px;
   font-size: 14px;
+  color: var(--color-text-muted);
 }
 
 .btn {
@@ -103,19 +107,19 @@ input {
 
 .btn-primary {
   background: var(--color-light-blue);
-  color: var(--color-white);
+  color: var(--color-bg);
 }
 
 .btn-ghost {
   background: transparent;
-  color: var(--color-white);
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
 }
 
 .btn-outline {
-  background: var(--color-white);
-  color: var(--color-navy);
-  border: 1px solid var(--color-gray-300);
+  background: transparent;
+  color: var(--color-light-blue);
+  border: 1px solid var(--color-light-blue);
 }
 
 .main-content {
@@ -127,7 +131,8 @@ input {
 }
 
 .card {
-  background: var(--color-white);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 20px;
@@ -137,11 +142,11 @@ input {
 .card h2 {
   margin-top: 0;
   font-size: 16px;
-  color: var(--color-navy);
+  color: var(--color-text);
 }
 
 .points-highlight {
-  color: var(--color-navy);
+  color: var(--color-bg);
   background: var(--color-accent);
   display: inline-block;
   padding: 2px 10px;
@@ -156,7 +161,8 @@ input {
 }
 
 .reward-card {
-  background: var(--color-white);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 16px;
@@ -168,7 +174,7 @@ input {
 .reward-card .reward-image {
   height: 120px;
   border-radius: var(--radius);
-  background: var(--color-light-blue-soft);
+  background: var(--color-surface-alt);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -181,8 +187,17 @@ input {
 }
 
 .reward-card .reward-cost {
-  color: var(--color-navy);
+  color: var(--color-accent);
   font-weight: 700;
+}
+
+.reward-card-locked {
+  opacity: 0.6;
+}
+
+.reward-icon {
+  font-size: 48px;
+  line-height: 1;
 }
 
 .badge {
@@ -194,18 +209,18 @@ input {
 }
 
 .badge-pending {
-  background: var(--color-gray-100);
-  color: var(--color-gray-700);
+  background: var(--color-surface-alt);
+  color: var(--color-text-muted);
 }
 
 .badge-approved {
-  background: #e3f5e6;
-  color: #1c7a34;
+  background: rgba(57, 255, 20, 0.15);
+  color: var(--color-accent-green);
 }
 
 .badge-denied {
-  background: #fbe6e6;
-  color: #b3261e;
+  background: rgba(255, 107, 107, 0.15);
+  color: var(--color-danger);
 }
 
 .auth-screen {
@@ -215,7 +230,7 @@ input {
   align-items: center;
   justify-content: center;
   gap: 24px;
-  background: var(--color-navy);
+  background: var(--color-bg);
   padding: 20px;
 }
 
@@ -250,7 +265,8 @@ input {
 }
 
 .auth-card {
-  background: var(--color-white);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 32px;
@@ -261,10 +277,11 @@ input {
 .auth-card h1 {
   font-size: 20px;
   margin-bottom: 4px;
+  color: var(--color-text);
 }
 
 .auth-card p.subtitle {
-  color: var(--color-gray-700);
+  color: var(--color-text-muted);
   font-size: 14px;
   margin-top: 0;
   margin-bottom: 20px;
@@ -279,15 +296,17 @@ input {
   font-size: 13px;
   font-weight: 600;
   margin-bottom: 4px;
-  color: var(--color-gray-700);
+  color: var(--color-text-muted);
 }
 
 .field input {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid var(--color-gray-300);
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius);
   font-size: 14px;
+  color: var(--color-text);
 }
 
 .field input:focus {
@@ -316,13 +335,13 @@ input {
 }
 
 .error-text {
-  color: #b3261e;
+  color: var(--color-danger);
   font-size: 13px;
   margin: 8px 0;
 }
 
 .muted {
-  color: var(--color-gray-500);
+  color: var(--color-text-muted);
   font-size: 13px;
 }
 
@@ -340,9 +359,99 @@ input {
   align-items: center;
   justify-content: space-between;
   padding: 10px 0;
-  border-bottom: 1px solid var(--color-gray-100);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .list-row:last-child {
   border-bottom: none;
+}
+
+/* Points hero + progress bar, styled after the AI Studio reference for a
+   more game-like, engaging dashboard feel. */
+.points-hero {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.points-hero-stat {
+  flex: 1;
+  min-width: 140px;
+  background: var(--color-surface-alt);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  text-align: center;
+}
+
+.points-hero-stat .stat-label {
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.points-hero-stat .stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.points-hero-stat.total .stat-value {
+  color: var(--color-accent);
+  font-size: 28px;
+}
+
+.progress-track {
+  background: var(--color-surface-alt);
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.progress-fill {
+  background: var(--color-light-blue);
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.progress-callout {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--color-accent-green);
+}
+
+.transaction-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 13px;
+}
+
+.transaction-row:last-child {
+  border-bottom: none;
+}
+
+.transaction-row .transaction-date {
+  color: var(--color-text-muted);
+  width: 90px;
+  flex-shrink: 0;
+}
+
+.transaction-row .transaction-desc {
+  flex: 1;
+}
+
+.transaction-row .transaction-points.positive {
+  color: var(--color-accent-green);
+  font-weight: 700;
+}
+
+.transaction-row .transaction-points.negative {
+  color: var(--color-danger);
+  font-weight: 700;
 }

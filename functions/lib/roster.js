@@ -79,6 +79,10 @@ async function resolveIdentityLinkLogic(auth, data, requireRole) {
 
   const ledgerSnap = await rosterRef.collection('ledger').get();
   const totalHistoricalPoints = ledgerSnap.docs.reduce((sum, d) => sum + (d.data().points || 0), 0);
+  // Week IDs look like "2026-W25" - lexicographic comparison sorts them correctly.
+  const latestLedgerEntry = ledgerSnap.docs
+    .map((d) => d.data())
+    .sort((a, b) => (b.week || '').localeCompare(a.week || ''))[0];
 
   await db.runTransaction(async (tx) => {
     const [reviewSnap, rosterSnap] = await Promise.all([tx.get(reviewRef), tx.get(rosterRef)]);
@@ -96,6 +100,7 @@ async function resolveIdentityLinkLogic(auth, data, requireRole) {
     tx.update(db.collection('users').doc(review.userId), {
       rosterId,
       totalPoints: admin.firestore.FieldValue.increment(totalHistoricalPoints),
+      ...(latestLedgerEntry ? { currentStanding: latestLedgerEntry.standing } : {}),
     });
     tx.update(reviewRef, {
       status: 'resolved',
