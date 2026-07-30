@@ -8,6 +8,7 @@
   --color-text: #f1f4f9;
   --color-text-muted: #8b96ab;
   --color-light-blue: #5aa8f5;
+  --color-teal: #4dd9d9;
   --color-light-blue-soft: rgba(90, 168, 245, 0.12);
   --color-gray-300: #2a3550;
   --color-accent: #e3ff2e;
@@ -62,16 +63,14 @@ input {
 }
 
 .logo {
-  width: 32px;
-  height: 32px;
   border-radius: 50%;
-  background: var(--color-light-blue);
-  color: var(--color-bg);
+  background: var(--color-navy);
+  color: var(--color-teal);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 18px;
+  flex-shrink: 0;
 }
 
 .brand-badge {

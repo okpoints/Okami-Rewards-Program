@@ -7,13 +7,10 @@ import {
 } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 import { auth, functions } from '../firebase';
+import OkamiLogo from '../components/OkamiLogo';
 
 const findRosterCandidates = httpsCallable(functions, 'findRosterCandidates');
 const requestIdentityLink = httpsCallable(functions, 'requestIdentityLink');
-
-function Logo() {
-  return <div className="logo">O</div>;
-}
 
 // After a brand-new driver signs up, we try to match them against the
 // Cortex roster so their point history gets linked instead of starting at
@@ -180,7 +177,7 @@ export default function AuthPage({ onSignupComplete }) {
       </div>
       <div className="auth-card">
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
-          <Logo />
+          <OkamiLogo size={40} />
         </div>
         <h1>{mode === 'login' ? 'Welcome back' : 'Create your account'}</h1>
         <form onSubmit={handleSubmit}>

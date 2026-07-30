@@ -1,11 +1,12 @@
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
+import OkamiLogo from '../components/OkamiLogo';
 
 export default function TopBar({ user, role, activeTab, onTabChange }) {
   return (
     <div className="topbar">
       <div className="topbar-left">
-        <div className="logo">O</div>
+        <OkamiLogo size={32} />
         <span className="topbar-title">Okami Rewards</span>
         {role === 'associate' && onTabChange && (
           <nav className="topbar-nav">

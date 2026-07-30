@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import {
+  collection, doc, onSnapshot, query, where,
+  addDoc, updateDoc, deleteDoc,
+} from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../firebase';
 
@@ -7,27 +10,215 @@ const resolveRedemption = httpsCallable(functions, 'resolveRedemption');
 const seedInitialRewards = httpsCallable(functions, 'seedInitialRewards');
 const seedInitialAnnouncement = httpsCallable(functions, 'seedInitialAnnouncement');
 const manualCortexSync = httpsCallable(functions, 'manualCortexSync');
+const resolveIdentityLink = httpsCallable(functions, 'resolveIdentityLink');
+const createBonusTask = httpsCallable(functions, 'createBonusTask');
+const deleteBonusTask = httpsCallable(functions, 'deleteBonusTask');
+const resolveBonusTask = httpsCallable(functions, 'resolveBonusTask');
+const createAnnouncement = httpsCallable(functions, 'createAnnouncement');
+const deleteAnnouncement = httpsCallable(functions, 'deleteAnnouncement');
+const confirmAnnouncementParticipant = httpsCallable(functions, 'confirmAnnouncementParticipant');
+const resolveAnnouncementCompletion = httpsCallable(functions, 'resolveAnnouncementCompletion');
+const adjustPoints = httpsCallable(functions, 'adjustPoints');
+
+const BONUS_URGENCY = ['low', 'medium', 'high', 'very_high'];
+const ANNOUNCEMENT_URGENCY = ['low', 'medium', 'high', 'critical'];
+
+function BonusTaskCard({ task, associatesById }) {
+  const [enrollments, setEnrollments] = useState([]);
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'bonusTasks', task.id, 'enrollments'), (snap) => {
+      setEnrollments(snap.docs.map((d) => ({ userId: d.id, ...d.data() })));
+    });
+    return unsub;
+  }, [task.id]);
+
+  const pending = enrollments.filter((e) => e.status === 'enrolled');
+
+  async function handleResolve(userId, decision) {
+    setMessage('');
+    try {
+      await resolveBonusTask({ taskId: task.id, userId, decision });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleDelete() {
+    setMessage('');
+    try {
+      await deleteBonusTask({ taskId: task.id });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  return (
+    <div className="list-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <strong>{task.title}</strong>{' '}
+          <span className="muted">({task.urgency}, {task.openings} openings, {task.pointValue} pts)</span>
+        </div>
+        <button className="btn btn-outline" onClick={handleDelete}>Delete</button>
+      </div>
+      {task.description && <p className="muted">{task.description}</p>}
+      {pending.length === 0 && <p className="muted">No pending enrollments.</p>}
+      {pending.map((e) => (
+        <div className="list-row" key={e.userId}>
+          <span>{associatesById[e.userId]?.fullName || e.userId}</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-primary" onClick={() => handleResolve(e.userId, 'approved')}>Approve</button>
+            <button className="btn btn-outline" onClick={() => handleResolve(e.userId, 'denied')}>Deny</button>
+          </div>
+        </div>
+      ))}
+      {message && <p className="error-text">{message}</p>}
+    </div>
+  );
+}
+
+function AnnouncementCard({ announcement, associatesById }) {
+  const [enrollments, setEnrollments] = useState([]);
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'announcements', announcement.id, 'enrollments'), (snap) => {
+      setEnrollments(snap.docs.map((d) => ({ userId: d.id, ...d.data() })));
+    });
+    return unsub;
+  }, [announcement.id]);
+
+  const awaitingConfirmation = enrollments.filter((e) => e.status === 'enrolled');
+  const confirmed = enrollments.filter((e) => e.status === 'confirmed');
+
+  async function handleConfirm(userId, confirmedDecision) {
+    setMessage('');
+    try {
+      await confirmAnnouncementParticipant({ announcementId: announcement.id, userId, confirmed: confirmedDecision });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleResolveCompletion(userId, decision) {
+    setMessage('');
+    try {
+      await resolveAnnouncementCompletion({ announcementId: announcement.id, userId, decision });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleDelete() {
+    setMessage('');
+    try {
+      await deleteAnnouncement({ announcementId: announcement.id });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  return (
+    <div className="list-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <strong>{announcement.title}</strong>{' '}
+          <span className="muted">
+            ({announcement.urgency}, needs {announcement.driversNeeded}, {announcement.pointValue} pts)
+          </span>
+        </div>
+        <button className="btn btn-outline" onClick={handleDelete}>Archive</button>
+      </div>
+      {announcement.description && <p className="muted">{announcement.description}</p>}
+
+      {awaitingConfirmation.length > 0 && (
+        <div>
+          <p className="muted">Signed up, awaiting confirmation:</p>
+          {awaitingConfirmation.map((e) => (
+            <div className="list-row" key={e.userId}>
+              <span>{associatesById[e.userId]?.fullName || e.userId}</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-primary" onClick={() => handleConfirm(e.userId, true)}>Confirm</button>
+                <button className="btn btn-outline" onClick={() => handleConfirm(e.userId, false)}>Not selected</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {confirmed.length > 0 && (
+        <div>
+          <p className="muted">Confirmed, awaiting completion:</p>
+          {confirmed.map((e) => (
+            <div className="list-row" key={e.userId}>
+              <span>{associatesById[e.userId]?.fullName || e.userId}</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-primary" onClick={() => handleResolveCompletion(e.userId, 'approved')}>Completed</button>
+                <button className="btn btn-outline" onClick={() => handleResolveCompletion(e.userId, 'denied')}>Didn't happen</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {enrollments.length === 0 && <p className="muted">No signups yet.</p>}
+      {message && <p className="error-text">{message}</p>}
+    </div>
+  );
+}
 
 export default function ManagerDashboard() {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [rewards, setRewards] = useState([]);
+  const [pendingReviews, setPendingReviews] = useState([]);
+  const [unclaimedRoster, setUnclaimedRoster] = useState([]);
+  const [reviewRosterPicks, setReviewRosterPicks] = useState({});
+  const [bonusTasks, setBonusTasks] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
+  const [associates, setAssociates] = useState([]);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
 
+  const [newTask, setNewTask] = useState({ title: '', description: '', urgency: 'medium', openings: 1, pointValue: 50 });
+  const [newAnnouncement, setNewAnnouncement] = useState({ title: '', description: '', urgency: 'medium', driversNeeded: 1, pointValue: 50 });
+  const [newReward, setNewReward] = useState({ name: '', pointCost: 500 });
+  const [adjustment, setAdjustment] = useState({ userId: '', delta: '', reason: '' });
+
+  const associatesById = Object.fromEntries(associates.map((a) => [a.id, a]));
+
   useEffect(() => {
-    const pendingQuery = query(collection(db, 'redemptionRequests'), where('status', '==', 'pending'));
-    const unsubPending = onSnapshot(pendingQuery, (snap) => {
+    const unsubPending = onSnapshot(query(collection(db, 'redemptionRequests'), where('status', '==', 'pending')), (snap) => {
       setPendingRequests(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
-
-    const rewardsQuery = query(collection(db, 'rewards'));
-    const unsubRewards = onSnapshot(rewardsQuery, (snap) => {
+    const unsubRewards = onSnapshot(collection(db, 'rewards'), (snap) => {
       setRewards(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    const unsubReviews = onSnapshot(query(collection(db, 'pendingReview'), where('status', '==', 'open')), (snap) => {
+      setPendingReviews(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    const unsubRoster = onSnapshot(query(collection(db, 'roster'), where('linkedUserId', '==', null)), (snap) => {
+      setUnclaimedRoster(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    const unsubTasks = onSnapshot(collection(db, 'bonusTasks'), (snap) => {
+      setBonusTasks(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((t) => t.active));
+    });
+    const unsubAnnouncements = onSnapshot(collection(db, 'announcements'), (snap) => {
+      setAnnouncements(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((a) => a.active));
+    });
+    const unsubAssociates = onSnapshot(query(collection(db, 'users'), where('role', '==', 'associate')), (snap) => {
+      setAssociates(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
 
     return () => {
       unsubPending();
       unsubRewards();
+      unsubReviews();
+      unsubRoster();
+      unsubTasks();
+      unsubAnnouncements();
+      unsubAssociates();
     };
   }, []);
 
@@ -53,6 +244,97 @@ export default function ManagerDashboard() {
     }
   }
 
+  async function handleResolveReview(reviewId, suggestedRosterId) {
+    setMessage('');
+    const rosterId = reviewRosterPicks[reviewId] ?? suggestedRosterId ?? '';
+    if (!rosterId) {
+      setMessage('Pick a roster entry to link before confirming.');
+      return;
+    }
+    try {
+      await resolveIdentityLink({ reviewId, rosterId });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleCreateTask(e) {
+    e.preventDefault();
+    setMessage('');
+    try {
+      await createBonusTask({
+        ...newTask,
+        openings: Number(newTask.openings),
+        pointValue: Number(newTask.pointValue),
+      });
+      setNewTask({ title: '', description: '', urgency: 'medium', openings: 1, pointValue: 50 });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleCreateAnnouncement(e) {
+    e.preventDefault();
+    setMessage('');
+    try {
+      await createAnnouncement({
+        ...newAnnouncement,
+        driversNeeded: Number(newAnnouncement.driversNeeded),
+        pointValue: Number(newAnnouncement.pointValue),
+      });
+      setNewAnnouncement({ title: '', description: '', urgency: 'medium', driversNeeded: 1, pointValue: 50 });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleCreateReward(e) {
+    e.preventDefault();
+    setMessage('');
+    try {
+      await addDoc(collection(db, 'rewards'), {
+        name: newReward.name,
+        pointCost: Number(newReward.pointCost),
+        description: '',
+        imageUrl: null,
+        active: true,
+      });
+      setNewReward({ name: '', pointCost: 500 });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleToggleRewardActive(reward) {
+    setMessage('');
+    try {
+      await updateDoc(doc(db, 'rewards', reward.id), { active: !reward.active });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleDeleteReward(rewardId) {
+    setMessage('');
+    try {
+      await deleteDoc(doc(db, 'rewards', rewardId));
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleAdjustPoints(e) {
+    e.preventDefault();
+    setMessage('');
+    try {
+      await adjustPoints({ userId: adjustment.userId, delta: Number(adjustment.delta), reason: adjustment.reason });
+      setMessage('Points adjusted.');
+      setAdjustment({ userId: '', delta: '', reason: '' });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
   return (
     <div>
       {message && <div className="card"><p>{message}</p></div>}
@@ -74,6 +356,30 @@ export default function ManagerDashboard() {
       </div>
 
       <div className="card">
+        <h2>Pending signup confirmations ({pendingReviews.length})</h2>
+        {pendingReviews.length === 0 && <p className="muted">Nothing pending.</p>}
+        {pendingReviews.map((review) => (
+          <div className="list-row" key={review.id} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+            <span>New driver says their name is <strong>{review.enteredName}</strong></span>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <select
+                value={reviewRosterPicks[review.id] ?? review.suggestedRosterId ?? ''}
+                onChange={(e) => setReviewRosterPicks((prev) => ({ ...prev, [review.id]: e.target.value }))}
+              >
+                <option value="">Select a roster match...</option>
+                {unclaimedRoster.map((r) => (
+                  <option value={r.id} key={r.id}>{r.cortexFullName}</option>
+                ))}
+              </select>
+              <button className="btn btn-primary" onClick={() => handleResolveReview(review.id, review.suggestedRosterId)}>
+                Link & confirm
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card">
         <h2>Pending redemption requests</h2>
         {pendingRequests.length === 0 && <p className="muted">Nothing pending.</p>}
         {pendingRequests.map((req) => (
@@ -88,14 +394,119 @@ export default function ManagerDashboard() {
       </div>
 
       <div className="card">
+        <h2>Bonus tasks</h2>
+        <form onSubmit={handleCreateTask} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
+          <div className="field" style={{ flex: '1 1 160px' }}>
+            <label>Title</label>
+            <input value={newTask.title} onChange={(e) => setNewTask({ ...newTask, title: e.target.value })} required />
+          </div>
+          <div className="field" style={{ flex: '2 1 220px' }}>
+            <label>Description</label>
+            <input value={newTask.description} onChange={(e) => setNewTask({ ...newTask, description: e.target.value })} />
+          </div>
+          <div className="field">
+            <label>Urgency</label>
+            <select value={newTask.urgency} onChange={(e) => setNewTask({ ...newTask, urgency: e.target.value })}>
+              {BONUS_URGENCY.map((u) => <option value={u} key={u}>{u}</option>)}
+            </select>
+          </div>
+          <div className="field" style={{ width: 90 }}>
+            <label>Openings</label>
+            <input type="number" min="1" value={newTask.openings} onChange={(e) => setNewTask({ ...newTask, openings: e.target.value })} required />
+          </div>
+          <div className="field" style={{ width: 100 }}>
+            <label>Points</label>
+            <input type="number" min="1" value={newTask.pointValue} onChange={(e) => setNewTask({ ...newTask, pointValue: e.target.value })} required />
+          </div>
+          <button className="btn btn-primary" type="submit">Add task</button>
+        </form>
+        {bonusTasks.length === 0 && <p className="muted">No active bonus tasks.</p>}
+        {bonusTasks.map((task) => <BonusTaskCard task={task} associatesById={associatesById} key={task.id} />)}
+      </div>
+
+      <div className="card">
+        <h2>Area of highest need</h2>
+        <form onSubmit={handleCreateAnnouncement} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
+          <div className="field" style={{ flex: '1 1 160px' }}>
+            <label>Title</label>
+            <input value={newAnnouncement.title} onChange={(e) => setNewAnnouncement({ ...newAnnouncement, title: e.target.value })} required />
+          </div>
+          <div className="field" style={{ flex: '2 1 220px' }}>
+            <label>Description</label>
+            <input value={newAnnouncement.description} onChange={(e) => setNewAnnouncement({ ...newAnnouncement, description: e.target.value })} />
+          </div>
+          <div className="field">
+            <label>Urgency</label>
+            <select value={newAnnouncement.urgency} onChange={(e) => setNewAnnouncement({ ...newAnnouncement, urgency: e.target.value })}>
+              {ANNOUNCEMENT_URGENCY.map((u) => <option value={u} key={u}>{u}</option>)}
+            </select>
+          </div>
+          <div className="field" style={{ width: 110 }}>
+            <label>Drivers needed</label>
+            <input type="number" min="1" value={newAnnouncement.driversNeeded} onChange={(e) => setNewAnnouncement({ ...newAnnouncement, driversNeeded: e.target.value })} required />
+          </div>
+          <div className="field" style={{ width: 100 }}>
+            <label>Points</label>
+            <input type="number" min="1" value={newAnnouncement.pointValue} onChange={(e) => setNewAnnouncement({ ...newAnnouncement, pointValue: e.target.value })} required />
+          </div>
+          <button className="btn btn-primary" type="submit">Post need</button>
+        </form>
+        <p className="muted" style={{ marginTop: -8, marginBottom: 12 }}>
+          Only one urgent need should really be live at a time - archive the old one before posting a new one.
+        </p>
+        {announcements.length === 0 && <p className="muted">No active announcement.</p>}
+        {announcements.map((a) => <AnnouncementCard announcement={a} associatesById={associatesById} key={a.id} />)}
+      </div>
+
+      <div className="card">
         <h2>Reward catalog</h2>
+        <form onSubmit={handleCreateReward} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
+          <div className="field" style={{ flex: '1 1 200px' }}>
+            <label>Reward name</label>
+            <input value={newReward.name} onChange={(e) => setNewReward({ ...newReward, name: e.target.value })} required />
+          </div>
+          <div className="field" style={{ width: 120 }}>
+            <label>Point cost</label>
+            <input type="number" min="1" value={newReward.pointCost} onChange={(e) => setNewReward({ ...newReward, pointCost: e.target.value })} required />
+          </div>
+          <button className="btn btn-primary" type="submit">Add reward</button>
+        </form>
         {rewards.length === 0 && <p className="muted">No rewards yet - seed the catalog above.</p>}
         {rewards.map((reward) => (
           <div className="list-row" key={reward.id}>
-            <span>{reward.name}</span>
-            <span>{reward.pointCost} pts {!reward.active && '(inactive)'}</span>
+            <span>{reward.name} - {reward.pointCost} pts {!reward.active && '(inactive)'}</span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-outline" onClick={() => handleToggleRewardActive(reward)}>
+                {reward.active ? 'Deactivate' : 'Activate'}
+              </button>
+              <button className="btn btn-outline" onClick={() => handleDeleteReward(reward.id)}>Delete</button>
+            </div>
           </div>
         ))}
+      </div>
+
+      <div className="card">
+        <h2>Manual point adjustment</h2>
+        <form onSubmit={handleAdjustPoints} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div className="field" style={{ flex: '1 1 200px' }}>
+            <label>Driver</label>
+            <select value={adjustment.userId} onChange={(e) => setAdjustment({ ...adjustment, userId: e.target.value })} required>
+              <option value="">Select a driver...</option>
+              {associates.map((a) => (
+                <option value={a.id} key={a.id}>{a.fullName || a.email}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field" style={{ width: 120 }}>
+            <label>Points (+/-)</label>
+            <input type="number" value={adjustment.delta} onChange={(e) => setAdjustment({ ...adjustment, delta: e.target.value })} required />
+          </div>
+          <div className="field" style={{ flex: '1 1 220px' }}>
+            <label>Reason</label>
+            <input value={adjustment.reason} onChange={(e) => setAdjustment({ ...adjustment, reason: e.target.value })} required />
+          </div>
+          <button className="btn btn-primary" type="submit">Apply</button>
+        </form>
       </div>
     </div>
   );
