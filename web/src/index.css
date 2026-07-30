@@ -10,7 +10,7 @@
   --color-light-blue: #5aa8f5;
   --color-light-blue-soft: rgba(90, 168, 245, 0.12);
   --color-gray-300: #2a3550;
-  --color-accent: #f4e300;
+  --color-accent: #e3ff2e;
   --color-accent-green: #39ff14;
   --color-danger: #ff6b6b;
   --radius: 10px;
@@ -72,6 +72,19 @@ input {
   justify-content: center;
   font-weight: 700;
   font-size: 18px;
+}
+
+.brand-badge {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--color-accent);
+  color: var(--color-bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  box-shadow: 0 0 14px rgba(227, 255, 46, 0.5);
 }
 
 .topbar-title {
@@ -330,6 +343,10 @@ input {
   color: var(--color-white);
   font-size: 22px;
   font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
 }
 
 .auth-hero-tagline {

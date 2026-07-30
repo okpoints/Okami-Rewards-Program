@@ -171,7 +171,8 @@ export default function AuthPage({ onSignupComplete }) {
     <div className="auth-screen">
       <div className="auth-hero">
         <div className="auth-hero-title">
-          <span role="img" aria-hidden="true">🚚</span> Okami Rewards Program
+          <span className="brand-badge" role="img" aria-hidden="true">🚚</span>
+          Okami Logistics <span className="muted" style={{ fontWeight: 400, fontSize: 15 }}>Rewards Program</span>
         </div>
         <p className="auth-hero-tagline">
           Turn your excellent performance into <span className="accent-text-green">amazing rewards</span>
