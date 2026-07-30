@@ -19,9 +19,18 @@ const deleteAnnouncement = httpsCallable(functions, 'deleteAnnouncement');
 const confirmAnnouncementParticipant = httpsCallable(functions, 'confirmAnnouncementParticipant');
 const resolveAnnouncementCompletion = httpsCallable(functions, 'resolveAnnouncementCompletion');
 const adjustPoints = httpsCallable(functions, 'adjustPoints');
+const addRosterAlias = httpsCallable(functions, 'addRosterAlias');
+const createRosterEntry = httpsCallable(functions, 'createRosterEntry');
+const setRosterActive = httpsCallable(functions, 'setRosterActive');
+const setManagerPermission = httpsCallable(functions, 'setManagerPermission');
+const queryActivityLog = httpsCallable(functions, 'queryActivityLog');
 
 const BONUS_URGENCY = ['low', 'medium', 'high', 'very_high'];
 const ANNOUNCEMENT_URGENCY = ['low', 'medium', 'high', 'critical'];
+const PERMISSION_LABELS = {
+  viewActivityLog: 'View activity log',
+  manageManagerPermissions: 'Manage other managers’ permissions',
+};
 
 function BonusTaskCard({ task, associatesById }) {
   const [enrollments, setEnrollments] = useState([]);
@@ -169,7 +178,7 @@ function AnnouncementCard({ announcement, associatesById }) {
   );
 }
 
-export default function ManagerDashboard() {
+export default function ManagerDashboard({ user, role }) {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [rewards, setRewards] = useState([]);
   const [pendingReviews, setPendingReviews] = useState([]);
@@ -178,6 +187,10 @@ export default function ManagerDashboard() {
   const [bonusTasks, setBonusTasks] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [associates, setAssociates] = useState([]);
+  const [myProfile, setMyProfile] = useState(null);
+  const [roster, setRoster] = useState([]);
+  const [managers, setManagers] = useState([]);
+  const [activityEntries, setActivityEntries] = useState(null);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -185,8 +198,13 @@ export default function ManagerDashboard() {
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', description: '', urgency: 'medium', driversNeeded: 1, pointValue: 50 });
   const [newReward, setNewReward] = useState({ name: '', pointCost: 500 });
   const [adjustment, setAdjustment] = useState({ userId: '', delta: '', reason: '' });
+  const [aliasDrafts, setAliasDrafts] = useState({});
+  const [newRosterEntry, setNewRosterEntry] = useState({ fullName: '' });
+  const [activityFilters, setActivityFilters] = useState({ actorName: '', action: '' });
 
   const associatesById = Object.fromEntries(associates.map((a) => [a.id, a]));
+  const canManagePermissions = role === 'admin' || myProfile?.permissions?.manageManagerPermissions;
+  const canViewActivityLog = role === 'admin' || myProfile?.permissions?.viewActivityLog;
 
   useEffect(() => {
     const unsubPending = onSnapshot(query(collection(db, 'redemptionRequests'), where('status', '==', 'pending')), (snap) => {
@@ -210,6 +228,12 @@ export default function ManagerDashboard() {
     const unsubAssociates = onSnapshot(query(collection(db, 'users'), where('role', '==', 'associate')), (snap) => {
       setAssociates(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
+    const unsubFullRoster = onSnapshot(collection(db, 'roster'), (snap) => {
+      setRoster(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    const unsubManagers = onSnapshot(query(collection(db, 'users'), where('role', '==', 'manager')), (snap) => {
+      setManagers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
 
     return () => {
       unsubPending();
@@ -219,8 +243,16 @@ export default function ManagerDashboard() {
       unsubTasks();
       unsubAnnouncements();
       unsubAssociates();
+      unsubFullRoster();
+      unsubManagers();
     };
   }, []);
+
+  useEffect(() => {
+    if (!user?.uid) return undefined;
+    const unsub = onSnapshot(doc(db, 'users', user.uid), (snap) => setMyProfile(snap.data()));
+    return unsub;
+  }, [user?.uid]);
 
   async function handleResolve(requestId, decision) {
     setMessage('');
@@ -330,6 +362,62 @@ export default function ManagerDashboard() {
       await adjustPoints({ userId: adjustment.userId, delta: Number(adjustment.delta), reason: adjustment.reason });
       setMessage('Points adjusted.');
       setAdjustment({ userId: '', delta: '', reason: '' });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleAddAlias(rosterId) {
+    setMessage('');
+    const alias = (aliasDrafts[rosterId] || '').trim();
+    if (!alias) return;
+    try {
+      await addRosterAlias({ rosterId, alias });
+      setAliasDrafts((prev) => ({ ...prev, [rosterId]: '' }));
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleToggleRosterActive(entry) {
+    setMessage('');
+    try {
+      await setRosterActive({ rosterId: entry.id, active: !entry.active });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleCreateRosterEntry(e) {
+    e.preventDefault();
+    setMessage('');
+    try {
+      await createRosterEntry({ fullName: newRosterEntry.fullName });
+      setNewRosterEntry({ fullName: '' });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleTogglePermission(managerId, permission, enabled) {
+    setMessage('');
+    try {
+      await setManagerPermission({ managerId, permission, enabled });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleSearchActivityLog(e) {
+    e.preventDefault();
+    setMessage('');
+    try {
+      const res = await queryActivityLog({
+        actorName: activityFilters.actorName || undefined,
+        action: activityFilters.action || undefined,
+        limit: 100,
+      });
+      setActivityEntries(res.data.entries);
     } catch (err) {
       setMessage(err.message);
     }
@@ -508,6 +596,111 @@ export default function ManagerDashboard() {
           <button className="btn btn-primary" type="submit">Apply</button>
         </form>
       </div>
+
+      <div className="card">
+        <h2>Roster</h2>
+        <form onSubmit={handleCreateRosterEntry} style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginBottom: 16 }}>
+          <div className="field" style={{ flex: '1 1 240px' }}>
+            <label>Add a driver manually (before their first Cortex report)</label>
+            <input value={newRosterEntry.fullName} onChange={(e) => setNewRosterEntry({ fullName: e.target.value })} required />
+          </div>
+          <button className="btn btn-outline" type="submit">Add to roster</button>
+        </form>
+        {roster.length === 0 && <p className="muted">No roster entries yet.</p>}
+        {roster.map((entry) => (
+          <div className="list-row" key={entry.id} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>
+                {entry.cortexFullName}{' '}
+                <span className="muted">
+                  ({entry.linkedUserId ? 'linked' : 'unclaimed'}{entry.active === false ? ', inactive' : ''})
+                </span>
+              </span>
+              <button className="btn btn-outline" onClick={() => handleToggleRosterActive(entry)}>
+                {entry.active === false ? 'Reactivate' : 'Deactivate'}
+              </button>
+            </div>
+            {entry.aliases?.length > 0 && (
+              <p className="muted">Aliases: {entry.aliases.join(', ')}</p>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                placeholder="Add a nickname/alias"
+                value={aliasDrafts[entry.id] || ''}
+                onChange={(e) => setAliasDrafts((prev) => ({ ...prev, [entry.id]: e.target.value }))}
+                style={{ flex: 1 }}
+              />
+              <button className="btn btn-outline" onClick={() => handleAddAlias(entry.id)}>Add alias</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {canManagePermissions && (
+        <div className="card">
+          <h2>Manager permissions</h2>
+          <p className="muted">Delegate specific abilities to individual managers.</p>
+          {managers.length === 0 && <p className="muted">No manager accounts yet.</p>}
+          {managers.map((m) => (
+            <div className="list-row" key={m.id} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
+              <strong>{m.fullName || m.email}</strong>
+              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                {Object.entries(PERMISSION_LABELS)
+                  .filter(([key]) => role === 'admin' || key !== 'manageManagerPermissions')
+                  .map(([key, label]) => (
+                    <label key={key} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 14 }}>
+                      <input
+                        type="checkbox"
+                        checked={!!m.permissions?.[key]}
+                        onChange={(e) => handleTogglePermission(m.id, key, e.target.checked)}
+                      />
+                      {label}
+                    </label>
+                  ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {canViewActivityLog && (
+        <div className="card">
+          <h2>Activity log</h2>
+          {role === 'manager' && (
+            <p className="muted">You'll only see driver activity here, never other managers' or admins'.</p>
+          )}
+          <form onSubmit={handleSearchActivityLog} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
+            <div className="field">
+              <label>Name contains</label>
+              <input
+                value={activityFilters.actorName}
+                onChange={(e) => setActivityFilters({ ...activityFilters, actorName: e.target.value })}
+              />
+            </div>
+            <div className="field">
+              <label>Action</label>
+              <input
+                placeholder="e.g. request_redemption"
+                value={activityFilters.action}
+                onChange={(e) => setActivityFilters({ ...activityFilters, action: e.target.value })}
+              />
+            </div>
+            <button className="btn btn-primary" type="submit">Search</button>
+          </form>
+          {activityEntries === null && <p className="muted">Run a search to see recent activity.</p>}
+          {activityEntries?.length === 0 && <p className="muted">No matching entries.</p>}
+          {activityEntries?.map((entry) => (
+            <div className="list-row" key={entry.id}>
+              <span>
+                <strong>{entry.actorName}</strong> ({entry.actorPosition}) - {entry.action}
+              </span>
+              <span className="muted">
+                {entry.createdAt?.seconds ? new Date(entry.createdAt.seconds * 1000).toLocaleString() : ''}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
