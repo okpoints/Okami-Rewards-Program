@@ -25,6 +25,7 @@ const addRosterAlias = httpsCallable(functions, 'addRosterAlias');
 const createRosterEntry = httpsCallable(functions, 'createRosterEntry');
 const setRosterActive = httpsCallable(functions, 'setRosterActive');
 const setManagerPermission = httpsCallable(functions, 'setManagerPermission');
+const setUserRole = httpsCallable(functions, 'setUserRole');
 const queryActivityLog = httpsCallable(functions, 'queryActivityLog');
 
 const BONUS_URGENCY = ['low', 'medium', 'high', 'very_high'];
@@ -282,6 +283,7 @@ export default function ManagerDashboard({ user, role }) {
   const [aliasDrafts, setAliasDrafts] = useState({});
   const [newRosterEntry, setNewRosterEntry] = useState({ fullName: '' });
   const [activityFilters, setActivityFilters] = useState({ actorName: '', actorId: '', action: '', pageSize: 15 });
+  const [roleAssignmentUserId, setRoleAssignmentUserId] = useState('');
   const [activityCursors, setActivityCursors] = useState([null]);
   const [activityPage, setActivityPage] = useState(0);
   const [activityHasMore, setActivityHasMore] = useState(false);
@@ -498,6 +500,15 @@ export default function ManagerDashboard({ user, role }) {
     setMessage('');
     try {
       await setManagerPermission({ managerId, permission, enabled });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleSetUserRole(userId, newRole) {
+    setMessage('');
+    try {
+      await setUserRole({ userId, role: newRole });
     } catch (err) {
       setMessage(err.message);
     }
@@ -791,7 +802,79 @@ export default function ManagerDashboard({ user, role }) {
         ))}
       </div>
 
-      {canManagePermissions && (
+      {role === 'admin' && (
+        <div className="card">
+          <h2>Privilege assignment</h2>
+          <p className="muted">Promote an employee to manager or admin, or change someone's role back.</p>
+          <div className="field" style={{ maxWidth: 360, marginTop: 12 }}>
+            <label>Select employee / driver</label>
+            <SearchableSelect
+              placeholder="Search for anyone..."
+              value={roleAssignmentUserId}
+              onChange={setRoleAssignmentUserId}
+              options={[...associates, ...managers, ...admins]
+                .filter((u) => u.id !== user.uid)
+                .map((u) => ({ value: u.id, label: `${u.fullName || u.email} - ${u.role}` }))}
+            />
+          </div>
+          {roleAssignmentUserId && (() => {
+            const target = [...associates, ...managers, ...admins].find((u) => u.id === roleAssignmentUserId);
+            if (!target) return null;
+            return (
+              <div style={{ marginTop: 16 }}>
+                <p className="muted">Current role: <strong>{target.role}</strong></p>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  {['associate', 'manager', 'admin'].map((r) => (
+                    <button
+                      key={r}
+                      className={target.role === r ? 'btn btn-primary' : 'btn btn-outline'}
+                      onClick={() => handleSetUserRole(target.id, r)}
+                    >
+                      {r === 'associate' ? 'Employee' : r === 'manager' ? 'Manager' : 'Administrator'}
+                    </button>
+                  ))}
+                </div>
+                {target.role === 'manager' && (
+                  <div style={{ marginTop: 16, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                    {Object.entries(PERMISSION_LABELS).map(([key, label]) => (
+                      <label key={key} style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 14 }}>
+                        <input
+                          type="checkbox"
+                          checked={!!target.permissions?.[key]}
+                          onChange={(e) => handleTogglePermission(target.id, key, e.target.checked)}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {role === 'admin' && (
+        <div className="card">
+          <h2>Privileged roster ({managers.length + admins.length})</h2>
+          <p className="muted">Everyone who currently holds manager or admin access.</p>
+          {[...managers, ...admins].length === 0 && <p className="muted">No manager or admin accounts yet.</p>}
+          {[...managers, ...admins].map((u) => (
+            <div className="list-row" key={u.id}>
+              <span>
+                {u.fullName || u.email} <span className="badge badge-pending">{u.role}</span>
+              </span>
+              {u.id !== user.uid && (
+                <button className="btn btn-outline" onClick={() => handleSetUserRole(u.id, 'associate')}>
+                  Revoke privileges
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {role === 'manager' && canManagePermissions && (
         <div className="card">
           <h2>Manager permissions</h2>
           <p className="muted">Delegate specific abilities to individual managers.</p>

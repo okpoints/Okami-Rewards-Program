@@ -38,6 +38,7 @@ const {
 } = require('./lib/announcements');
 const { requireRole } = require('./lib/roles');
 const { runCortexSyncWithStatusTracking } = require('./lib/syncStatus');
+const { setUserRoleLogic } = require('./lib/userRoles');
 const { FIREBASE_ADMIN_SERVICE_ACCOUNT: DRIVE_SERVICE_ACCOUNT } = require('./lib/serviceAccount');
 
 exports.onUserCreate = onUserCreate;
@@ -111,6 +112,13 @@ exports.deletePointAdjustment = onCall((request) => deletePointAdjustmentLogic(r
 // Admin grants/revokes optional permissions on a manager's account
 // (currently: viewActivityLog).
 exports.setManagerPermission = onCall((request) => setManagerPermissionLogic(request.auth, request.data, requireRole));
+
+// setCustomUserClaims needs the same Firebase Admin SDK service account as
+// onUserCreate - the default runtime identity doesn't have Auth Admin
+// permission to change someone's role.
+exports.setUserRole = onCall({ serviceAccount: DRIVE_SERVICE_ACCOUNT }, (request) =>
+  setUserRoleLogic(request.auth, request.data, requireRole)
+);
 
 // The sanctioned way to browse the activity log - see firestore.rules for
 // why direct client reads are admin-only.
