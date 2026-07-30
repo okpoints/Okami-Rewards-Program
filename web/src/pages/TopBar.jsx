@@ -1,6 +1,7 @@
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 import OkamiLogo from '../components/OkamiLogo';
+import NotificationBell from '../components/NotificationBell';
 
 export default function TopBar({ user, role, activeTab, onTabChange }) {
   return (
@@ -26,6 +27,7 @@ export default function TopBar({ user, role, activeTab, onTabChange }) {
         )}
       </div>
       <div className="topbar-right">
+        <NotificationBell user={user} />
         <span>{user.displayName || user.email} ({role || 'pending'})</span>
         <button className="btn btn-ghost" onClick={() => signOut(auth)}>Log out</button>
       </div>
