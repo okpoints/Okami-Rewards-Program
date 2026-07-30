@@ -200,7 +200,11 @@ export default function ManagerDashboard({ user, role }) {
   const [adjustment, setAdjustment] = useState({ userId: '', delta: '', reason: '' });
   const [aliasDrafts, setAliasDrafts] = useState({});
   const [newRosterEntry, setNewRosterEntry] = useState({ fullName: '' });
-  const [activityFilters, setActivityFilters] = useState({ actorName: '', action: '' });
+  const [activityFilters, setActivityFilters] = useState({ actorName: '', actorId: '', action: '', pageSize: 15 });
+  const [activityCursors, setActivityCursors] = useState([null]);
+  const [activityPage, setActivityPage] = useState(0);
+  const [activityHasMore, setActivityHasMore] = useState(false);
+  const [admins, setAdmins] = useState([]);
   const [syncStatus, setSyncStatus] = useState(null);
 
   const associatesById = Object.fromEntries(associates.map((a) => [a.id, a]));
@@ -235,6 +239,9 @@ export default function ManagerDashboard({ user, role }) {
     const unsubManagers = onSnapshot(query(collection(db, 'users'), where('role', '==', 'manager')), (snap) => {
       setManagers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
+    const unsubAdmins = onSnapshot(query(collection(db, 'users'), where('role', '==', 'admin')), (snap) => {
+      setAdmins(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
 
     return () => {
       unsubPending();
@@ -246,6 +253,7 @@ export default function ManagerDashboard({ user, role }) {
       unsubAssociates();
       unsubFullRoster();
       unsubManagers();
+      unsubAdmins();
     };
   }, []);
 
@@ -414,19 +422,47 @@ export default function ManagerDashboard({ user, role }) {
     }
   }
 
-  async function handleSearchActivityLog(e) {
-    e.preventDefault();
+  // activityCursors[i] is the startAfterId needed to fetch page i (index 0
+  // is always null/first-page). Fetching page N appends the cursor for
+  // page N+1, so "next" always has what it needs and "prev" replays a
+  // cursor we already have instead of re-deriving it.
+  async function loadActivityPage(pageIndex, cursors) {
     setMessage('');
     try {
       const res = await queryActivityLog({
         actorName: activityFilters.actorName || undefined,
+        actorId: activityFilters.actorId || undefined,
         action: activityFilters.action || undefined,
-        limit: 100,
+        limit: Number(activityFilters.pageSize),
+        startAfterId: cursors[pageIndex] || undefined,
       });
       setActivityEntries(res.data.entries);
+      setActivityHasMore(res.data.hasMore);
+      if (res.data.lastId) {
+        const updated = [...cursors];
+        updated[pageIndex + 1] = res.data.lastId;
+        setActivityCursors(updated);
+      }
+      setActivityPage(pageIndex);
     } catch (err) {
       setMessage(err.message);
     }
+  }
+
+  async function handleSearchActivityLog(e) {
+    e.preventDefault();
+    const cursors = [null];
+    setActivityCursors(cursors);
+    await loadActivityPage(0, cursors);
+  }
+
+  async function handleActivityNextPage() {
+    await loadActivityPage(activityPage + 1, activityCursors);
+  }
+
+  async function handleActivityPrevPage() {
+    if (activityPage === 0) return;
+    await loadActivityPage(activityPage - 1, activityCursors);
   }
 
   const SYNC_STALE_DAYS = 8;
@@ -704,12 +740,25 @@ export default function ManagerDashboard({ user, role }) {
             <p className="muted">You'll only see driver activity here, never other managers' or admins'.</p>
           )}
           <form onSubmit={handleSearchActivityLog} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
-            <div className="field">
-              <label>Name contains</label>
+            <div className="field" style={{ flex: '1 1 200px' }}>
+              <label>Search by name</label>
               <input
+                placeholder="Search logs by manager, admin, or employee name..."
                 value={activityFilters.actorName}
                 onChange={(e) => setActivityFilters({ ...activityFilters, actorName: e.target.value })}
               />
+            </div>
+            <div className="field">
+              <label>Quick filter by user</label>
+              <select
+                value={activityFilters.actorId}
+                onChange={(e) => setActivityFilters({ ...activityFilters, actorId: e.target.value })}
+              >
+                <option value="">All users</option>
+                {associates.map((a) => <option value={a.id} key={a.id}>{a.fullName || a.email} (employee)</option>)}
+                {role === 'admin' && managers.map((m) => <option value={m.id} key={m.id}>{m.fullName || m.email} (manager)</option>)}
+                {role === 'admin' && admins.map((a) => <option value={a.id} key={a.id}>{a.fullName || a.email} (admin)</option>)}
+              </select>
             </div>
             <div className="field">
               <label>Action</label>
@@ -718,6 +767,17 @@ export default function ManagerDashboard({ user, role }) {
                 value={activityFilters.action}
                 onChange={(e) => setActivityFilters({ ...activityFilters, action: e.target.value })}
               />
+            </div>
+            <div className="field" style={{ width: 90 }}>
+              <label>Per page</label>
+              <select
+                value={activityFilters.pageSize}
+                onChange={(e) => setActivityFilters({ ...activityFilters, pageSize: e.target.value })}
+              >
+                <option value={15}>15</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
             </div>
             <button className="btn btn-primary" type="submit">Search</button>
           </form>
@@ -733,6 +793,19 @@ export default function ManagerDashboard({ user, role }) {
               </span>
             </div>
           ))}
+          {activityEntries !== null && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+              <span className="muted">Page {activityPage + 1}</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-outline" disabled={activityPage === 0} onClick={handleActivityPrevPage}>
+                  ‹ Prev
+                </button>
+                <button className="btn btn-outline" disabled={!activityHasMore} onClick={handleActivityNextPage}>
+                  Next ›
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
