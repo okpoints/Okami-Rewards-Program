@@ -66,6 +66,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /syncStatus/{statusId} {
+      allow read: if isManagerOrAdmin();
+      allow write: if false;
+    }
+
     match /bonusTasks/{taskId} {
       allow read: if isSignedIn(); // everyone can browse the task library
       allow write: if false; // Cloud Functions only

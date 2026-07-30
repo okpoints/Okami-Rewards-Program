@@ -37,6 +37,7 @@ const {
   seedInitialAnnouncementLogic,
 } = require('./lib/announcements');
 const { requireRole } = require('./lib/roles');
+const { runCortexSyncWithStatusTracking } = require('./lib/syncStatus');
 const { FIREBASE_ADMIN_SERVICE_ACCOUNT: DRIVE_SERVICE_ACCOUNT } = require('./lib/serviceAccount');
 
 exports.onUserCreate = onUserCreate;
@@ -48,7 +49,7 @@ exports.weeklyCortexSync = onSchedule(
     serviceAccount: DRIVE_SERVICE_ACCOUNT,
   },
   async () => {
-    const result = await syncCortexFile();
+    const result = await runCortexSyncWithStatusTracking(syncCortexFile, { notifyOnFailure: true });
     console.log('Cortex sync result:', result);
   }
 );
@@ -58,7 +59,7 @@ exports.weeklyCortexSync = onSchedule(
 // version, or it would run as the default compute identity and fail.
 exports.manualCortexSync = onCall({ serviceAccount: DRIVE_SERVICE_ACCOUNT }, async (request) => {
   requireRole(request.auth, ['manager', 'admin']);
-  return syncCortexFile();
+  return runCortexSyncWithStatusTracking(syncCortexFile, { notifyOnFailure: false });
 });
 
 exports.requestRedemption = onCall((request) => requestRedemptionLogic(request.auth, request.data));

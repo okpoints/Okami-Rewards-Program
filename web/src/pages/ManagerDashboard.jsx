@@ -201,6 +201,7 @@ export default function ManagerDashboard({ user, role }) {
   const [aliasDrafts, setAliasDrafts] = useState({});
   const [newRosterEntry, setNewRosterEntry] = useState({ fullName: '' });
   const [activityFilters, setActivityFilters] = useState({ actorName: '', action: '' });
+  const [syncStatus, setSyncStatus] = useState(null);
 
   const associatesById = Object.fromEntries(associates.map((a) => [a.id, a]));
   const canManagePermissions = role === 'admin' || myProfile?.permissions?.manageManagerPermissions;
@@ -253,6 +254,11 @@ export default function ManagerDashboard({ user, role }) {
     const unsub = onSnapshot(doc(db, 'users', user.uid), (snap) => setMyProfile(snap.data()));
     return unsub;
   }, [user?.uid]);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'syncStatus', 'cortex'), (snap) => setSyncStatus(snap.data() || null));
+    return unsub;
+  }, []);
 
   async function handleResolve(requestId, decision) {
     setMessage('');
@@ -423,9 +429,37 @@ export default function ManagerDashboard({ user, role }) {
     }
   }
 
+  const SYNC_STALE_DAYS = 8;
+  const lastSuccessAt = syncStatus?.lastSuccessAt?.toDate ? syncStatus.lastSuccessAt.toDate() : null;
+  const lastAttemptAt = syncStatus?.lastAttemptAt?.toDate ? syncStatus.lastAttemptAt.toDate() : null;
+  const daysSinceSuccess = lastSuccessAt ? (Date.now() - lastSuccessAt.getTime()) / (1000 * 60 * 60 * 24) : null;
+  const isCurrentlyFailing = !!syncStatus?.lastError && (!lastSuccessAt || (lastAttemptAt && lastAttemptAt > lastSuccessAt));
+  const isStale = daysSinceSuccess === null || daysSinceSuccess > SYNC_STALE_DAYS;
+  const showSyncWarning = isCurrentlyFailing || isStale;
+
   return (
     <div>
       {message && <div className="card"><p>{message}</p></div>}
+
+      {showSyncWarning && (
+        <div className="card sync-warning-card">
+          <h2>⚠️ {isCurrentlyFailing ? 'Automatic Cortex sync failed' : 'Cortex sync may be out of date'}</h2>
+          <p className="muted">
+            {lastSuccessAt
+              ? `Last successful sync: ${lastSuccessAt.toLocaleDateString()} (${Math.floor(daysSinceSuccess)} days ago).`
+              : 'No successful sync has been recorded yet.'}
+          </p>
+          {syncStatus?.lastError && (
+            <p className="error-text">Last error: {syncStatus.lastError}</p>
+          )}
+          <p className="muted">
+            If the weekly automatic sync didn't run, make sure this week's Cortex CSV is in the Okami Rewards Program Drive folder, then force a sync below.
+          </p>
+          <button className="btn btn-primary" disabled={busy} onClick={() => handleAction(() => manualCortexSync(), 'Cortex sync complete.')}>
+            Force Sync Now
+          </button>
+        </div>
+      )}
 
       <div className="card">
         <h2>Setup</h2>
