@@ -29,7 +29,10 @@ async function adjustPointsLogic(auth, data, requireRole) {
     createdAt: admin.firestore.Timestamp.now(),
   });
 
-  await userRef.update({ totalPoints: admin.firestore.FieldValue.increment(delta) });
+  await userRef.update({
+    totalPoints: admin.firestore.FieldValue.increment(delta),
+    ...(delta < 0 ? { deductionCount: admin.firestore.FieldValue.increment(1) } : {}),
+  });
 
   await logActivity({
     actorId: auth.uid,

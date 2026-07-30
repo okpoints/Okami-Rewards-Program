@@ -153,8 +153,12 @@ async function resolveBonusTaskLogic(auth, data, requireRole) {
     });
 
     if (decision === 'approved') {
+      const isRescue = /rescue/i.test(task.title || '');
       tx.update(db.collection('users').doc(userId), {
         totalPoints: admin.firestore.FieldValue.increment(task.pointValue),
+        completedBonusTasksCount: admin.firestore.FieldValue.increment(1),
+        lastBonusTaskCompletedAt: admin.firestore.Timestamp.now(),
+        ...(isRescue ? { rescueCompletedCount: admin.firestore.FieldValue.increment(1) } : {}),
       });
     }
 

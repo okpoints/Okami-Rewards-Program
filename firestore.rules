@@ -24,7 +24,7 @@ service cloud.firestore {
       allow create, delete: if false; // accounts are provisioned server-side
       allow update: if isSignedIn() && request.auth.uid == userId
                     && request.resource.data.diff(resource.data).affectedKeys()
-                        .hasOnly(['phone', 'notificationPreferences']);
+                        .hasOnly(['phone', 'notificationPreferences', 'photoUrl']);
 
       match /notifications/{notifId} {
         allow read: if isSignedIn() && request.auth.uid == userId;
