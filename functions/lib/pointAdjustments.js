@@ -56,4 +56,38 @@ async function adjustPointsLogic(auth, data, requireRole) {
   return { success: true };
 }
 
-module.exports = { adjustPointsLogic };
+// Reverses a manual adjustment - deletes the record and un-does its effect
+// on the driver's balance. Only ever applies to manager/admin-entered
+// adjustments; Cortex ledger entries and redemptions have their own
+// integrity rules and aren't touched by this.
+async function deletePointAdjustmentLogic(auth, data, requireRole) {
+  const role = requireRole(auth, ['manager', 'admin']);
+  const { adjustmentId } = data || {};
+  if (!adjustmentId) throw new HttpsError('invalid-argument', 'adjustmentId is required.');
+
+  const adjustmentRef = db.collection('pointAdjustments').doc(adjustmentId);
+  const snap = await adjustmentRef.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Adjustment not found.');
+  const adjustment = snap.data();
+
+  await db.runTransaction(async (tx) => {
+    tx.update(db.collection('users').doc(adjustment.userId), {
+      totalPoints: admin.firestore.FieldValue.increment(-adjustment.delta),
+    });
+    tx.delete(adjustmentRef);
+  });
+
+  await logActivity({
+    actorId: auth.uid,
+    actorName: auth.token.name || 'Unknown',
+    actorPosition: role,
+    action: 'delete_point_adjustment',
+    targetType: 'pointAdjustments',
+    targetId: adjustmentId,
+    details: { userId: adjustment.userId, reversedDelta: adjustment.delta, reason: adjustment.reason },
+  });
+
+  return { success: true };
+}
+
+module.exports = { adjustPointsLogic, deletePointAdjustmentLogic };

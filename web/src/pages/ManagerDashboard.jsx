@@ -5,6 +5,7 @@ import {
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../firebase';
+import SearchableSelect from '../components/SearchableSelect';
 
 const resolveRedemption = httpsCallable(functions, 'resolveRedemption');
 const seedInitialRewards = httpsCallable(functions, 'seedInitialRewards');
@@ -19,6 +20,7 @@ const deleteAnnouncement = httpsCallable(functions, 'deleteAnnouncement');
 const confirmAnnouncementParticipant = httpsCallable(functions, 'confirmAnnouncementParticipant');
 const resolveAnnouncementCompletion = httpsCallable(functions, 'resolveAnnouncementCompletion');
 const adjustPoints = httpsCallable(functions, 'adjustPoints');
+const deletePointAdjustment = httpsCallable(functions, 'deletePointAdjustment');
 const addRosterAlias = httpsCallable(functions, 'addRosterAlias');
 const createRosterEntry = httpsCallable(functions, 'createRosterEntry');
 const setRosterActive = httpsCallable(functions, 'setRosterActive');
@@ -173,6 +175,85 @@ function AnnouncementCard({ announcement, associatesById }) {
       )}
 
       {enrollments.length === 0 && <p className="muted">No signups yet.</p>}
+      {message && <p className="error-text">{message}</p>}
+    </div>
+  );
+}
+
+function toDate(value) {
+  return value?.toDate ? value.toDate() : new Date(value);
+}
+
+function DriverPointHistory({ driver }) {
+  const [ledgerEntries, setLedgerEntries] = useState([]);
+  const [adjustments, setAdjustments] = useState([]);
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    if (!driver.rosterId) {
+      setLedgerEntries([]);
+      return undefined;
+    }
+    const unsub = onSnapshot(collection(db, 'roster', driver.rosterId, 'ledger'), (snap) => {
+      setLedgerEntries(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return unsub;
+  }, [driver.rosterId]);
+
+  useEffect(() => {
+    const unsub = onSnapshot(query(collection(db, 'pointAdjustments'), where('userId', '==', driver.id)), (snap) => {
+      setAdjustments(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return unsub;
+  }, [driver.id]);
+
+  async function handleDelete(adjustmentId) {
+    setMessage('');
+    try {
+      await deletePointAdjustment({ adjustmentId });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  const entries = [
+    ...ledgerEntries.map((e) => ({
+      id: `ledger-${e.id}`, date: e.createdAt, description: `Cortex week ${e.week} (${e.standing})`,
+      points: e.points, source: 'Amazon', deletable: false,
+    })),
+    ...adjustments.map((a) => ({
+      id: `adj-${a.id}`, date: a.createdAt, description: a.reason,
+      points: a.delta, source: 'DSP', deletable: true, adjustmentId: a.id,
+    })),
+  ].sort((a, b) => toDate(b.date) - toDate(a.date));
+
+  return (
+    <div className="card">
+      <h2>{driver.fullName || driver.email}'s point history</h2>
+      <p className="muted" style={{ marginTop: -8, marginBottom: 12 }}>{driver.totalPoints ?? 0} pts total</p>
+      {entries.length === 0 && <p className="muted">No point activity yet.</p>}
+      {entries.map((entry) => (
+        <div className="list-row" key={entry.id}>
+          <span>
+            <span className="badge badge-pending" style={{ marginRight: 8 }}>{entry.source}</span>
+            {entry.description}
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span className={entry.points >= 0 ? 'accent-text-green' : 'error-text'}>
+              {entry.points >= 0 ? '+' : ''}{entry.points} pts
+            </span>
+            {entry.deletable && (
+              <button
+                className="btn btn-ghost"
+                title="Delete this adjustment and reverse its points"
+                onClick={() => handleDelete(entry.adjustmentId)}
+              >
+                🗑️
+              </button>
+            )}
+          </span>
+        </div>
+      ))}
       {message && <p className="error-text">{message}</p>}
     </div>
   );
@@ -648,12 +729,12 @@ export default function ManagerDashboard({ user, role }) {
         <form onSubmit={handleAdjustPoints} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div className="field" style={{ flex: '1 1 200px' }}>
             <label>Driver</label>
-            <select value={adjustment.userId} onChange={(e) => setAdjustment({ ...adjustment, userId: e.target.value })} required>
-              <option value="">Select a driver...</option>
-              {associates.map((a) => (
-                <option value={a.id} key={a.id}>{a.fullName || a.email}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              placeholder="Search for a driver..."
+              value={adjustment.userId}
+              onChange={(value) => setAdjustment({ ...adjustment, userId: value })}
+              options={associates.map((a) => ({ value: a.id, label: a.fullName || a.email }))}
+            />
           </div>
           <div className="field" style={{ width: 120 }}>
             <label>Points (+/-)</label>
@@ -663,9 +744,13 @@ export default function ManagerDashboard({ user, role }) {
             <label>Reason</label>
             <input value={adjustment.reason} onChange={(e) => setAdjustment({ ...adjustment, reason: e.target.value })} required />
           </div>
-          <button className="btn btn-primary" type="submit">Apply</button>
+          <button className="btn btn-primary" type="submit" disabled={!adjustment.userId}>Apply</button>
         </form>
       </div>
+
+      {adjustment.userId && associatesById[adjustment.userId] && (
+        <DriverPointHistory driver={{ id: adjustment.userId, ...associatesById[adjustment.userId] }} />
+      )}
 
       <div className="card">
         <h2>Roster</h2>

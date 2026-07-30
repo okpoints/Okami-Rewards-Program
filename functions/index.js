@@ -22,7 +22,7 @@ const {
   enrollInBonusTaskLogic,
   resolveBonusTaskLogic,
 } = require('./lib/bonusTasks');
-const { adjustPointsLogic } = require('./lib/pointAdjustments');
+const { adjustPointsLogic, deletePointAdjustmentLogic } = require('./lib/pointAdjustments');
 const { setManagerPermissionLogic } = require('./lib/permissions');
 const { queryActivityLogLogic } = require('./lib/activityLogQuery');
 const {
@@ -105,6 +105,8 @@ exports.resolveBonusTask = onCall((request) => resolveBonusTaskLogic(request.aut
 // similar deductions until the messy Okami sheets can be parsed - and
 // stays available as a permanent feature after that too.
 exports.adjustPoints = onCall((request) => adjustPointsLogic(request.auth, request.data, requireRole));
+
+exports.deletePointAdjustment = onCall((request) => deletePointAdjustmentLogic(request.auth, request.data, requireRole));
 
 // Admin grants/revokes optional permissions on a manager's account
 // (currently: viewActivityLog).
