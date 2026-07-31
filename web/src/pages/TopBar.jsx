@@ -28,7 +28,7 @@ export default function TopBar({ user, role, activeTab, onTabChange }) {
         {(role === 'manager' || role === 'admin') && onTabChange && (
           <nav className="topbar-nav">
             <button
-              className={`topbar-nav-link${activeTab !== 'admin' ? ' active' : ''}`}
+              className={`topbar-nav-link${activeTab !== 'admin' && activeTab !== 'profile' ? ' active' : ''}`}
               onClick={() => onTabChange('controls')}
             >
               Manager Controls
@@ -38,6 +38,12 @@ export default function TopBar({ user, role, activeTab, onTabChange }) {
               onClick={() => onTabChange('admin')}
             >
               {role === 'admin' ? 'Admin panel' : 'Admin'}
+            </button>
+            <button
+              className={`topbar-nav-link${activeTab === 'profile' ? ' active' : ''}`}
+              onClick={() => onTabChange('profile')}
+            >
+              My Profile
             </button>
           </nav>
         )}

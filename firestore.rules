@@ -22,9 +22,20 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isSignedIn() && (request.auth.uid == userId || isManagerOrAdmin());
       allow create, delete: if false; // accounts are provisioned server-side
+      // Everyone can self-update phone/notificationPreferences/photoUrl.
+      // Managers and admins can also change their own display name - unlike
+      // associates, it isn't anchored to a Cortex identity match, so there's
+      // nothing for a name edit to break.
       allow update: if isSignedIn() && request.auth.uid == userId
-                    && request.resource.data.diff(resource.data).affectedKeys()
-                        .hasOnly(['phone', 'notificationPreferences', 'photoUrl']);
+                    && (
+                      request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['phone', 'notificationPreferences', 'photoUrl'])
+                      || (
+                        role() in ['manager', 'admin']
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                            .hasOnly(['phone', 'notificationPreferences', 'photoUrl', 'fullName'])
+                      )
+                    );
 
       match /notifications/{notifId} {
         allow read: if isSignedIn() && request.auth.uid == userId;

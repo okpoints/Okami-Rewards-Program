@@ -5,6 +5,7 @@ import TopBar from './pages/TopBar';
 import AssociateDashboard from './pages/AssociateDashboard';
 import ManagerDashboard from './pages/ManagerDashboard';
 import ProfilePage from './pages/ProfilePage';
+import StaffProfilePage from './pages/StaffProfilePage';
 
 export default function App() {
   const { user, role, loading } = useAuth();
@@ -47,6 +48,8 @@ export default function App() {
       <div className="main-content">
         {role === 'associate' ? (
           activeTab === 'profile' ? <ProfilePage user={user} /> : <AssociateDashboard user={user} />
+        ) : activeTab === 'profile' ? (
+          <StaffProfilePage user={user} role={role} />
         ) : (
           <ManagerDashboard user={user} role={role} activeTab={activeTab} />
         )}
