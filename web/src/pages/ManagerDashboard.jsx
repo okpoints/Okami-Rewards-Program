@@ -260,7 +260,7 @@ function DriverPointHistory({ driver }) {
   );
 }
 
-export default function ManagerDashboard({ user, role }) {
+export default function ManagerDashboard({ user, role, activeTab }) {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [rewards, setRewards] = useState([]);
   const [pendingReviews, setPendingReviews] = useState([]);
@@ -564,12 +564,14 @@ export default function ManagerDashboard({ user, role }) {
   const isCurrentlyFailing = !!syncStatus?.lastError && (!lastSuccessAt || (lastAttemptAt && lastAttemptAt > lastSuccessAt));
   const isStale = daysSinceSuccess === null || daysSinceSuccess > SYNC_STALE_DAYS;
   const showSyncWarning = isCurrentlyFailing || isStale;
+  const showAdminPanel = activeTab === 'admin';
+  const hasAnyAdminAccess = role === 'admin' || canManagePermissions || canViewActivityLog;
 
   return (
     <div>
       {message && <div className="card"><p>{message}</p></div>}
 
-      {showSyncWarning && (
+      {!showAdminPanel && showSyncWarning && (
         <div className="card sync-warning-card">
           <h2>⚠️ {isCurrentlyFailing ? 'Automatic Cortex sync failed' : 'Cortex sync may be out of date'}</h2>
           <p className="muted">
@@ -589,6 +591,8 @@ export default function ManagerDashboard({ user, role }) {
         </div>
       )}
 
+      {!showAdminPanel && (
+      <>
       <div className="card">
         <h2>Setup</h2>
         <p className="muted">One-time actions - safe to click even if already done, they'll just tell you.</p>
@@ -801,8 +805,17 @@ export default function ManagerDashboard({ user, role }) {
           </div>
         ))}
       </div>
+      </>
+      )}
 
-      {role === 'admin' && (
+      {showAdminPanel && !hasAnyAdminAccess && (
+        <div className="card">
+          <h2>Admin panel</h2>
+          <p className="muted">You haven't been granted any admin permissions yet - ask an admin to delegate activity log access or manager-permission management to you.</p>
+        </div>
+      )}
+
+      {showAdminPanel && role === 'admin' && (
         <div className="card">
           <h2>Privilege assignment</h2>
           <p className="muted">Promote an employee to manager or admin, or change someone's role back.</p>
@@ -854,7 +867,7 @@ export default function ManagerDashboard({ user, role }) {
         </div>
       )}
 
-      {role === 'admin' && (
+      {showAdminPanel && role === 'admin' && (
         <div className="card">
           <h2>Privileged roster ({managers.length + admins.length})</h2>
           <p className="muted">Everyone who currently holds manager or admin access.</p>
@@ -874,7 +887,7 @@ export default function ManagerDashboard({ user, role }) {
         </div>
       )}
 
-      {role === 'manager' && canManagePermissions && (
+      {showAdminPanel && role === 'manager' && canManagePermissions && (
         <div className="card">
           <h2>Manager permissions</h2>
           <p className="muted">Delegate specific abilities to individual managers.</p>
@@ -901,7 +914,7 @@ export default function ManagerDashboard({ user, role }) {
         </div>
       )}
 
-      {canViewActivityLog && (
+      {showAdminPanel && canViewActivityLog && (
         <div className="card">
           <h2>Activity log</h2>
           {role === 'manager' && (

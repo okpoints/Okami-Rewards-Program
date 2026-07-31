@@ -25,6 +25,22 @@ export default function TopBar({ user, role, activeTab, onTabChange }) {
             </button>
           </nav>
         )}
+        {(role === 'manager' || role === 'admin') && onTabChange && (
+          <nav className="topbar-nav">
+            <button
+              className={`topbar-nav-link${activeTab !== 'admin' ? ' active' : ''}`}
+              onClick={() => onTabChange('controls')}
+            >
+              Manager Controls
+            </button>
+            <button
+              className={`topbar-nav-link${activeTab === 'admin' ? ' active' : ''}${role === 'admin' ? ' admin-tab' : ''}`}
+              onClick={() => onTabChange('admin')}
+            >
+              {role === 'admin' ? 'Admin panel' : 'Admin'}
+            </button>
+          </nav>
+        )}
       </div>
       <div className="topbar-right">
         <NotificationBell user={user} />

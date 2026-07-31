@@ -117,6 +117,16 @@ input {
   color: var(--color-bg);
 }
 
+.topbar-nav-link.admin-tab {
+  background: var(--color-danger);
+  color: var(--color-white);
+}
+
+.topbar-nav-link.admin-tab.active {
+  background: var(--color-danger);
+  box-shadow: 0 0 0 2px var(--color-accent-green);
+}
+
 .topbar-right {
   display: flex;
   align-items: center;

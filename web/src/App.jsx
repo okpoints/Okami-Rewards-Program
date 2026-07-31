@@ -48,7 +48,7 @@ export default function App() {
         {role === 'associate' ? (
           activeTab === 'profile' ? <ProfilePage user={user} /> : <AssociateDashboard user={user} />
         ) : (
-          <ManagerDashboard user={user} role={role} />
+          <ManagerDashboard user={user} role={role} activeTab={activeTab} />
         )}
       </div>
     </div>
