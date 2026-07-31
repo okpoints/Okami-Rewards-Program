@@ -6,6 +6,7 @@ import {
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../firebase';
 import SearchableSelect from '../components/SearchableSelect';
+import RewardImageUpload from '../components/RewardImageUpload';
 
 const resolveRedemption = httpsCallable(functions, 'resolveRedemption');
 const seedInitialRewards = httpsCallable(functions, 'seedInitialRewards');
@@ -278,7 +279,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
 
   const [newTask, setNewTask] = useState({ title: '', description: '', urgency: 'medium', openings: 1, pointValue: 50 });
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', description: '', urgency: 'medium', driversNeeded: 1, pointValue: 50 });
-  const [newReward, setNewReward] = useState({ name: '', pointCost: 500 });
+  const [newReward, setNewReward] = useState({ name: '', pointCost: 500, imageUrl: '' });
   const [adjustment, setAdjustment] = useState({ userId: '', delta: '', reason: '' });
   const [aliasDrafts, setAliasDrafts] = useState({});
   const [newRosterEntry, setNewRosterEntry] = useState({ fullName: '' });
@@ -425,10 +426,10 @@ export default function ManagerDashboard({ user, role, activeTab }) {
         name: newReward.name,
         pointCost: Number(newReward.pointCost),
         description: '',
-        imageUrl: null,
+        imageUrl: newReward.imageUrl || null,
         active: true,
       });
-      setNewReward({ name: '', pointCost: 500 });
+      setNewReward({ name: '', pointCost: 500, imageUrl: '' });
     } catch (err) {
       setMessage(err.message);
     }
@@ -438,6 +439,15 @@ export default function ManagerDashboard({ user, role, activeTab }) {
     setMessage('');
     try {
       await updateDoc(doc(db, 'rewards', reward.id), { active: !reward.active });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleChangeRewardImage(rewardId, imageUrl) {
+    setMessage('');
+    try {
+      await updateDoc(doc(db, 'rewards', rewardId), { imageUrl });
     } catch (err) {
       setMessage(err.message);
     }
@@ -714,7 +724,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
 
       <div className="card">
         <h2>Reward catalog</h2>
-        <form onSubmit={handleCreateReward} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
+        <form onSubmit={handleCreateReward} style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
           <div className="field" style={{ flex: '1 1 200px' }}>
             <label>Reward name</label>
             <input value={newReward.name} onChange={(e) => setNewReward({ ...newReward, name: e.target.value })} required />
@@ -725,16 +735,30 @@ export default function ManagerDashboard({ user, role, activeTab }) {
           </div>
           <button className="btn btn-primary" type="submit">Add reward</button>
         </form>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
+          {newReward.imageUrl && (
+            <img src={newReward.imageUrl} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8 }} />
+          )}
+          <RewardImageUpload onUploaded={(url) => setNewReward({ ...newReward, imageUrl: url })} />
+        </div>
         {rewards.length === 0 && <p className="muted">No rewards yet - seed the catalog above.</p>}
         {rewards.map((reward) => (
-          <div className="list-row" key={reward.id}>
-            <span>{reward.name} - {reward.pointCost} pts {!reward.active && '(inactive)'}</span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-outline" onClick={() => handleToggleRewardActive(reward)}>
-                {reward.active ? 'Deactivate' : 'Activate'}
-              </button>
-              <button className="btn btn-outline" onClick={() => handleDeleteReward(reward.id)}>Delete</button>
+          <div className="list-row" key={reward.id} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {reward.imageUrl && (
+                  <img src={reward.imageUrl} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 6 }} />
+                )}
+                {reward.name} - {reward.pointCost} pts {!reward.active && '(inactive)'}
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-outline" onClick={() => handleToggleRewardActive(reward)}>
+                  {reward.active ? 'Deactivate' : 'Activate'}
+                </button>
+                <button className="btn btn-outline" onClick={() => handleDeleteReward(reward.id)}>Delete</button>
+              </div>
             </div>
+            <RewardImageUpload onUploaded={(url) => handleChangeRewardImage(reward.id, url)} />
           </div>
         ))}
       </div>

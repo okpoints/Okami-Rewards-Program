@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
+import { getStorage } from 'firebase/storage';
 
 // These values come from Firebase Console -> Project settings -> General ->
 // "Your apps" -> Web app -> SDK setup and configuration. They're safe to
@@ -17,14 +18,8 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-// TEMPORARY - just to debug why the API key is being rejected. Remove
-// once we confirm the real config is loading correctly.
-console.log('Firebase config the app is actually using:', {
-  ...firebaseConfig,
-  apiKey: firebaseConfig.apiKey ? `${firebaseConfig.apiKey.slice(0, 8)}... (length ${firebaseConfig.apiKey.length})` : firebaseConfig.apiKey,
-});
-
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const functions = getFunctions(app);
+export const storage = getStorage(app);
