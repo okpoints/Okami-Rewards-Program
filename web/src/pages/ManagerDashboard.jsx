@@ -289,6 +289,8 @@ export default function ManagerDashboard({ user, role, activeTab }) {
   const [rewardDraft, setRewardDraft] = useState({ name: '', pointCost: '' });
   const [adjustment, setAdjustment] = useState({ userId: '', delta: '', reason: '' });
   const [aliasDrafts, setAliasDrafts] = useState({});
+  const [rosterInviteEmailDrafts, setRosterInviteEmailDrafts] = useState({});
+  const [rosterGeneratedInvites, setRosterGeneratedInvites] = useState({});
   const [newRosterEntry, setNewRosterEntry] = useState({ fullName: '' });
   const [newUserAccount, setNewUserAccount] = useState({ fullName: '', email: '', role: 'associate' });
   const [newInvite, setNewInvite] = useState({ role: 'associate', label: '' });
@@ -515,6 +517,20 @@ export default function ManagerDashboard({ user, role, activeTab }) {
     try {
       await addRosterAlias({ rosterId, alias });
       setAliasDrafts((prev) => ({ ...prev, [rosterId]: '' }));
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleSendRosterInvite(rosterId) {
+    setMessage('');
+    const email = (rosterInviteEmailDrafts[rosterId] || '').trim();
+    try {
+      const res = await createInviteLink({ role: 'associate', rosterId, label: email });
+      setRosterGeneratedInvites((prev) => ({
+        ...prev,
+        [rosterId]: `${window.location.origin}/?invite=${res.data.token}`,
+      }));
     } catch (err) {
       setMessage(err.message);
     }
@@ -907,7 +923,10 @@ export default function ManagerDashboard({ user, role, activeTab }) {
               <span>
                 {entry.cortexFullName}{' '}
                 <span className="muted">
-                  ({entry.linkedUserId ? 'linked' : 'unclaimed'}{entry.active === false ? ', inactive' : ''})
+                  ({entry.linkedUserId
+                    ? `signed up${entry.linkedAt ? ' ' + toDate(entry.linkedAt).toLocaleDateString() : ''}`
+                    : 'not signed up yet'}
+                  {entry.active === false ? ', inactive' : ''})
                 </span>
               </span>
               <button className="btn btn-outline" onClick={() => handleToggleRosterActive(entry)}>
@@ -926,6 +945,27 @@ export default function ManagerDashboard({ user, role, activeTab }) {
               />
               <button className="btn btn-outline" onClick={() => handleAddAlias(entry.id)}>Add alias</button>
             </div>
+            {!entry.linkedUserId && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <input
+                  placeholder="Their email (for your own reference - not auto-sent)"
+                  value={rosterInviteEmailDrafts[entry.id] || ''}
+                  onChange={(e) => setRosterInviteEmailDrafts((prev) => ({ ...prev, [entry.id]: e.target.value }))}
+                  style={{ flex: 1 }}
+                />
+                <button className="btn btn-outline" onClick={() => handleSendRosterInvite(entry.id)}>
+                  Generate invite link
+                </button>
+              </div>
+            )}
+            {rosterGeneratedInvites[entry.id] && (
+              <div className="list-row">
+                <span style={{ wordBreak: 'break-all', fontSize: 13 }}>{rosterGeneratedInvites[entry.id]}</span>
+                <button className="btn btn-outline" onClick={() => handleCopyInviteLink(rosterGeneratedInvites[entry.id])}>
+                  Copy
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>

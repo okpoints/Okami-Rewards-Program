@@ -23,19 +23,34 @@ async function requireCreatePermission(auth, callerRole) {
   }
 }
 
+// rosterId is optional - when set (from the Roster card, inviting a
+// specific un-signed-up Cortex employee), redeeming this link also links
+// that roster entry and credits its historical points, same as a
+// manager-approved identity confirmation would - no separate self-
+// attestation/matching step needed, since sending this specific link to
+// this specific person already IS the confirmation.
 async function createInviteLinkLogic(auth, data, requireRole) {
   const callerRole = requireRole(auth, ['admin', 'manager']);
-  const { role: inviteRole, label } = data || {};
+  const { role: inviteRole, label, rosterId } = data || {};
   if (!INVITABLE_ROLES.includes(inviteRole)) {
     throw new HttpsError('invalid-argument', `role must be one of: ${INVITABLE_ROLES.join(', ')}`);
   }
   await requireCreatePermission(auth, callerRole);
+
+  if (rosterId) {
+    const rosterSnap = await db.collection('roster').doc(rosterId).get();
+    if (!rosterSnap.exists) throw new HttpsError('not-found', 'Roster entry not found.');
+    if (rosterSnap.data().linkedUserId) {
+      throw new HttpsError('failed-precondition', 'That roster entry is already linked to an account.');
+    }
+  }
 
   const token = generateToken();
   const now = admin.firestore.Timestamp.now();
   await db.collection('inviteLinks').doc(token).set({
     role: inviteRole,
     label: label || '',
+    rosterId: rosterId || null,
     status: 'active',
     createdBy: auth.uid,
     createdByName: auth.token.name || 'Unknown',
@@ -53,7 +68,7 @@ async function createInviteLinkLogic(auth, data, requireRole) {
     action: 'create_invite_link',
     targetType: 'inviteLinks',
     targetId: token,
-    details: { role: inviteRole, label },
+    details: { role: inviteRole, label: label || '', rosterId: rosterId || null },
   });
 
   return { success: true, token };
@@ -88,6 +103,23 @@ async function redeemInviteLinkLogic(auth, data) {
   const userRef = await waitForUserDoc(auth.uid);
   const inviteRef = db.collection('inviteLinks').doc(token);
 
+  // Read the invite once up front (outside the transaction) just to see if
+  // it names a roster entry - if so we need its ledger total before the
+  // transaction starts, same pattern resolveIdentityLinkLogic uses.
+  const preSnap = await inviteRef.get();
+  const rosterId = preSnap.exists ? (preSnap.data().rosterId ?? null) : null;
+  let rosterRef = null;
+  let totalHistoricalPoints = 0;
+  let latestLedgerEntry = null;
+  if (rosterId) {
+    rosterRef = db.collection('roster').doc(rosterId);
+    const ledgerSnap = await rosterRef.collection('ledger').get();
+    totalHistoricalPoints = ledgerSnap.docs.reduce((sum, d) => sum + (d.data().points || 0), 0);
+    latestLedgerEntry = ledgerSnap.docs
+      .map((d) => d.data())
+      .sort((a, b) => (b.week || '').localeCompare(a.week || ''))[0];
+  }
+
   const inviteRole = await db.runTransaction(async (tx) => {
     const inviteSnap = await tx.get(inviteRef);
     if (!inviteSnap.exists) throw new HttpsError('not-found', 'This invite link is not valid.');
@@ -105,7 +137,23 @@ async function redeemInviteLinkLogic(auth, data) {
       usedByName: auth.token.name || 'Unknown',
       usedAt: admin.firestore.Timestamp.now(),
     });
-    tx.update(userRef, { role: invite.role, permissions: admin.firestore.FieldValue.delete() });
+
+    const userUpdates = { role: invite.role, permissions: admin.firestore.FieldValue.delete() };
+
+    if (invite.rosterId) {
+      userUpdates.rosterId = invite.rosterId;
+      userUpdates.totalPoints = admin.firestore.FieldValue.increment(totalHistoricalPoints);
+      if (latestLedgerEntry) userUpdates.currentStanding = latestLedgerEntry.standing;
+    }
+    tx.update(userRef, userUpdates);
+
+    if (invite.rosterId) {
+      tx.update(db.collection('roster').doc(invite.rosterId), {
+        linkedUserId: auth.uid,
+        linkedAt: admin.firestore.Timestamp.now(),
+      });
+    }
+
     return invite.role;
   });
 
@@ -118,7 +166,7 @@ async function redeemInviteLinkLogic(auth, data) {
     action: 'redeem_invite_link',
     targetType: 'inviteLinks',
     targetId: token,
-    details: { role: inviteRole },
+    details: { role: inviteRole, rosterId, creditedPoints: totalHistoricalPoints },
   });
 
   return { success: true, role: inviteRole };

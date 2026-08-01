@@ -88,7 +88,7 @@ async function resolveIdentityLinkLogic(auth, data, requireRole) {
       throw new HttpsError('failed-precondition', 'That roster entry is already linked to another account.');
     }
 
-    tx.update(rosterRef, { linkedUserId: review.userId });
+    tx.update(rosterRef, { linkedUserId: review.userId, linkedAt: admin.firestore.Timestamp.now() });
     tx.update(db.collection('users').doc(review.userId), {
       rosterId,
       totalPoints: admin.firestore.FieldValue.increment(totalHistoricalPoints),
