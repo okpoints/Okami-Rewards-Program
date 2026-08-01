@@ -1,24 +1,9 @@
 const { HttpsError } = require('firebase-functions/v2/https');
 const { db, admin } = require('./admin');
 const { logActivity } = require('./activityLog');
+const { notifyUser, notifyManagers } = require('./notify');
 
 const URGENCY_LEVELS = ['low', 'medium', 'high', 'very_high'];
-
-async function notifyManagers(message) {
-  const managersSnap = await db.collection('users').where('role', 'in', ['manager', 'admin']).get();
-  const batch = db.batch();
-  managersSnap.docs.forEach((doc) => {
-    const notifRef = db.collection('users').doc(doc.id).collection('notifications').doc();
-    batch.set(notifRef, { type: 'bonusTask', message, read: false, createdAt: admin.firestore.Timestamp.now() });
-  });
-  await batch.commit();
-}
-
-async function notifyUser(userId, message) {
-  await db.collection('users').doc(userId).collection('notifications').add({
-    type: 'bonusTask', message, read: false, createdAt: admin.firestore.Timestamp.now(),
-  });
-}
 
 // Manager/admin authors a standing task drivers can browse and enroll in
 // anytime (Rescue, Pick up a shift, Train a new employee, Sweep vans, or
@@ -115,7 +100,7 @@ async function enrollInBonusTaskLogic(auth, data) {
     enrolledAt: admin.firestore.Timestamp.now(),
   });
 
-  await notifyManagers(`${auth.token.name || 'A driver'} enrolled in bonus task "${taskSnap.data().title}".`);
+  await notifyManagers('bonusTask', `${auth.token.name || 'A driver'} enrolled in bonus task "${taskSnap.data().title}".`);
 
   await logActivity({
     actorId: auth.uid, actorName: auth.token.name || 'Unknown', actorPosition: 'associate',
@@ -167,6 +152,7 @@ async function resolveBonusTaskLogic(auth, data, requireRole) {
 
   await notifyUser(
     userId,
+    'bonusTask',
     decision === 'approved'
       ? `Your bonus task completion was approved - you earned ${pointsAwarded} points.`
       : 'Your bonus task completion was not approved.'

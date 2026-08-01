@@ -1,19 +1,10 @@
 const { HttpsError } = require('firebase-functions/v2/https');
 const { db, admin } = require('./admin');
 const { logActivity } = require('./activityLog');
+const { notifyUser, notifyManagers, notifyAllAssociates } = require('./notify');
 
 const URGENCY_LEVELS = ['low', 'medium', 'high', 'critical'];
 const SIX_MONTHS_MS = 1000 * 60 * 60 * 24 * 30 * 6;
-
-async function notifyAllAssociates(message) {
-  const associatesSnap = await db.collection('users').where('role', '==', 'associate').get();
-  const batch = db.batch();
-  associatesSnap.docs.forEach((doc) => {
-    const notifRef = db.collection('users').doc(doc.id).collection('notifications').doc();
-    batch.set(notifRef, { type: 'announcement', message, read: false, createdAt: admin.firestore.Timestamp.now() });
-  });
-  await batch.commit();
-}
 
 // A new "Area of Highest Need" post - drivers get notified only for brand
 // new posts, never edits (see updateAnnouncementLogic).
@@ -39,7 +30,7 @@ async function createAnnouncementLogic(auth, data, requireRole) {
     createdAt: admin.firestore.Timestamp.now(),
   });
 
-  await notifyAllAssociates(`New need posted: "${title}"`);
+  await notifyAllAssociates('announcement', `New need posted: "${title}"`);
 
   await logActivity({
     actorId: auth.uid, actorName: auth.token.name || 'Unknown', actorPosition: role,
@@ -110,6 +101,8 @@ async function enrollInAnnouncementLogic(auth, data) {
     userId: auth.uid, status: 'enrolled', enrolledAt: admin.firestore.Timestamp.now(),
   });
 
+  await notifyManagers('announcement', `${auth.token.name || 'A driver'} signed up for "${snap.data().title}".`);
+
   await logActivity({
     actorId: auth.uid, actorName: auth.token.name || 'Unknown', actorPosition: 'associate',
     action: 'enroll_announcement', targetType: 'announcements', targetId: announcementId,
@@ -137,14 +130,13 @@ async function confirmAnnouncementParticipantLogic(auth, data, requireRole) {
     confirmedAt: admin.firestore.Timestamp.now(),
   });
 
-  await db.collection('users').doc(userId).collection('notifications').add({
-    type: 'announcement',
-    message: confirmed
+  await notifyUser(
+    userId,
+    'announcement',
+    confirmed
       ? 'You were confirmed for a need you signed up for.'
-      : 'You were not selected for a need you signed up for.',
-    read: false,
-    createdAt: admin.firestore.Timestamp.now(),
-  });
+      : 'You were not selected for a need you signed up for.'
+  );
 
   await logActivity({
     actorId: auth.uid, actorName: auth.token.name || 'Unknown', actorPosition: role,
@@ -191,14 +183,13 @@ async function resolveAnnouncementCompletionLogic(auth, data, requireRole) {
     return decision === 'approved' ? announcement.pointValue : 0;
   });
 
-  await db.collection('users').doc(userId).collection('notifications').add({
-    type: 'announcement',
-    message: decision === 'approved'
+  await notifyUser(
+    userId,
+    'announcement',
+    decision === 'approved'
       ? `Your completion was approved - you earned ${pointsAwarded} points.`
-      : 'Your completion was not approved.',
-    read: false,
-    createdAt: admin.firestore.Timestamp.now(),
-  });
+      : 'Your completion was not approved.'
+  );
 
   await logActivity({
     actorId: auth.uid, actorName: auth.token.name || 'Unknown', actorPosition: role,

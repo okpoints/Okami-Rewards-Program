@@ -1,6 +1,7 @@
 const { HttpsError } = require('firebase-functions/v2/https');
 const { db, admin } = require('./admin');
 const { logActivity } = require('./activityLog');
+const { notifyUser } = require('./notify');
 
 // Manual point add/deduct for manager/admin - the stand-in for negative
 // point events (no-call/no-show, tardiness) until the messy Okami sheets
@@ -44,14 +45,13 @@ async function adjustPointsLogic(auth, data, requireRole) {
     details: { userId, delta, reason: reason.trim() },
   });
 
-  await db.collection('users').doc(userId).collection('notifications').add({
-    type: 'pointAdjustment',
-    message: delta > 0
+  await notifyUser(
+    userId,
+    'pointAdjustment',
+    delta > 0
       ? `You were credited ${delta} points: ${reason.trim()}`
-      : `You were deducted ${Math.abs(delta)} points: ${reason.trim()}`,
-    read: false,
-    createdAt: admin.firestore.Timestamp.now(),
-  });
+      : `You were deducted ${Math.abs(delta)} points: ${reason.trim()}`
+  );
 
   return { success: true };
 }

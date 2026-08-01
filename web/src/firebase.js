@@ -23,3 +23,8 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const functions = getFunctions(app);
 export const storage = getStorage(app);
+
+// Also needed by push-notification setup, to hand the same config to the
+// service worker (which can't read import.meta.env itself) via its
+// registration URL query string.
+export { firebaseConfig };

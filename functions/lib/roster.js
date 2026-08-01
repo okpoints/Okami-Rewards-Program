@@ -2,16 +2,7 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const { db, admin } = require('./admin');
 const { findCandidates } = require('./nameMatching');
 const { logActivity } = require('./activityLog');
-
-async function notifyManagers(message) {
-  const managersSnap = await db.collection('users').where('role', 'in', ['manager', 'admin']).get();
-  const batch = db.batch();
-  managersSnap.docs.forEach((doc) => {
-    const notifRef = db.collection('users').doc(doc.id).collection('notifications').doc();
-    batch.set(notifRef, { type: 'pendingReview', message, read: false, createdAt: admin.firestore.Timestamp.now() });
-  });
-  await batch.commit();
-}
+const { notifyManagers } = require('./notify');
 
 // A driver signing up types their name; we suggest who they probably are
 // on the Cortex roster so the app can ask "are you ___?"
@@ -47,6 +38,7 @@ async function requestIdentityLinkLogic(auth, data) {
   });
 
   await notifyManagers(
+    'pendingReview',
     rosterId
       ? `New signup "${enteredName}" says they're Cortex roster ID ${rosterId} - needs confirmation.`
       : `New signup "${enteredName}" couldn't be matched to anyone on the Cortex roster - needs review.`

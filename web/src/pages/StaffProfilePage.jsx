@@ -2,6 +2,16 @@ import { useEffect, useState } from 'react';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { db, auth } from '../firebase';
+import PushDeviceToggle from '../components/PushDeviceToggle';
+
+const NOTIFICATION_TYPE_LABELS = {
+  redemption: 'Redemption requests (needs approval)',
+  bonusTask: 'Bonus task sign-ups and completions',
+  announcement: 'Area of Highest Need sign-ups',
+  pendingReview: 'New signups needing identity confirmation',
+  syncFailure: 'Cortex sync failures',
+  inactivityReview: 'Inactive driver reviews',
+};
 
 const BASE_PRIVILEGES = [
   'Approve or deny driver reward redemptions',
@@ -56,6 +66,15 @@ export default function StaffProfilePage({ user, role }) {
     try {
       await sendPasswordResetEmail(auth, user.email);
       setMessage('Password reset email sent - check your inbox (and spam/junk folder).');
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleToggleNotificationType(type, enabled) {
+    setMessage('');
+    try {
+      await updateDoc(doc(db, 'users', user.uid), { [`notificationPreferences.${type}`]: enabled });
     } catch (err) {
       setMessage(err.message);
     }
@@ -127,6 +146,27 @@ export default function StaffProfilePage({ user, role }) {
         )}
 
         {message && <p style={{ marginTop: 12 }}>{message}</p>}
+      </div>
+
+      <div className="card">
+        <h2>Notifications</h2>
+        <p className="muted" style={{ marginBottom: 12 }}>
+          Choose what actually needs to reach your phone. Everything still shows up in the app either way -
+          this only controls what buzzes your phone.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+          {Object.entries(NOTIFICATION_TYPE_LABELS).map(([type, label]) => (
+            <label key={type} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                type="checkbox"
+                checked={profile.notificationPreferences?.[type] !== false}
+                onChange={(e) => handleToggleNotificationType(type, e.target.checked)}
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+        <PushDeviceToggle userId={user.uid} />
       </div>
     </div>
   );

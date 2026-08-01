@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { collection, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { db, auth } from '../firebase';
+import PushDeviceToggle from '../components/PushDeviceToggle';
 
 function toDate(value) {
   return value?.toDate ? value.toDate() : new Date(value);
@@ -55,6 +56,15 @@ export default function ProfilePage({ user }) {
     try {
       await sendPasswordResetEmail(auth, user.email);
       setMessage('Password reset email sent - check your inbox (and spam/junk folder).');
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleTogglePushPreference(enabled) {
+    setMessage('');
+    try {
+      await updateDoc(doc(db, 'users', user.uid), { 'notificationPreferences.pushEnabled': enabled });
     } catch (err) {
       setMessage(err.message);
     }
@@ -170,6 +180,22 @@ export default function ProfilePage({ user }) {
           ))}
         </div>
       )}
+
+      <div className="card">
+        <h2>Notifications</h2>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+          <input
+            type="checkbox"
+            checked={profile.notificationPreferences?.pushEnabled !== false}
+            onChange={(e) => handleTogglePushPreference(e.target.checked)}
+          />
+          Send notifications to my phone (redemption updates, bonus task and area of highest need results, point changes)
+        </label>
+        <p className="muted" style={{ marginBottom: 12 }}>
+          Turning this off still shows notifications in the app - you just won't get them on your phone.
+        </p>
+        <PushDeviceToggle userId={user.uid} />
+      </div>
     </div>
   );
 }

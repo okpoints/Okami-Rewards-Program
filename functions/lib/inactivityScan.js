@@ -1,4 +1,5 @@
 const { db, admin } = require('./admin');
+const { notifyManagers } = require('./notify');
 
 const THIRTEEN_WEEKS_MS = 1000 * 60 * 60 * 24 * 7 * 13; // ~3 months
 
@@ -20,26 +21,20 @@ async function scanForInactiveDrivers() {
   const unflagged = staleRosterSnap.docs.filter((d) => !d.data().inactivityFlaggedAt);
   if (unflagged.length === 0) return { flagged: 0 };
 
-  const managersSnap = await db.collection('users').where('role', 'in', ['manager', 'admin']).get();
-  const batch = db.batch();
-  let flagged = 0;
+  const flagBatch = db.batch();
+  for (const rosterDoc of unflagged) {
+    // Mark as already-flagged so we don't re-notify every day until someone acts.
+    flagBatch.update(rosterDoc.ref, { inactivityFlaggedAt: admin.firestore.Timestamp.now() });
+  }
+  await flagBatch.commit();
 
   for (const rosterDoc of unflagged) {
     const roster = rosterDoc.data();
     const message = `${roster.cortexFullName} hasn't appeared in a Cortex import since week ${roster.lastSeenWeek} (~3 months) - review for deactivation.`;
-
-    managersSnap.docs.forEach((managerDoc) => {
-      const notifRef = db.collection('users').doc(managerDoc.id).collection('notifications').doc();
-      batch.set(notifRef, { type: 'inactivityReview', message, read: false, createdAt: admin.firestore.Timestamp.now() });
-    });
-
-    // Mark as already-flagged so we don't re-notify every day until someone acts.
-    batch.update(rosterDoc.ref, { inactivityFlaggedAt: admin.firestore.Timestamp.now() });
-    flagged += 1;
+    await notifyManagers('inactivityReview', message);
   }
 
-  await batch.commit();
-  return { flagged };
+  return { flagged: unflagged.length };
 }
 
 module.exports = { scanForInactiveDrivers };

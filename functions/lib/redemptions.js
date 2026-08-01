@@ -2,6 +2,7 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const { db, admin } = require('./admin');
 const { logActivity } = require('./activityLog');
 const { requireRole } = require('./roles');
+const { notifyUser, notifyManagers } = require('./notify');
 
 // Per the original spec: drivers can only redeem prizes once they've
 // reached Gold or Platinum standing (their most recent Cortex tier).
@@ -22,6 +23,7 @@ async function requestRedemptionLogic(auth, data) {
   const rewardRef = db.collection('rewards').doc(rewardId);
   const requestRef = db.collection('redemptionRequests').doc();
 
+  let rewardName;
   await db.runTransaction(async (tx) => {
     const [userSnap, rewardSnap] = await Promise.all([tx.get(userRef), tx.get(rewardRef)]);
     if (!rewardSnap.exists || !rewardSnap.data().active) {
@@ -36,6 +38,7 @@ async function requestRedemptionLogic(auth, data) {
       throw new HttpsError('failed-precondition', 'Not enough points for this reward.');
     }
 
+    rewardName = reward.name;
     tx.set(requestRef, {
       userId: auth.uid,
       rewardId,
@@ -48,12 +51,8 @@ async function requestRedemptionLogic(auth, data) {
 
   // Confirms the submission itself - separate from the later approve/deny
   // notification sent in resolveRedemptionLogic below.
-  await db.collection('users').doc(auth.uid).collection('notifications').add({
-    type: 'redemption',
-    message: 'Your redemption request was submitted and is awaiting manager approval.',
-    read: false,
-    createdAt: admin.firestore.Timestamp.now(),
-  });
+  await notifyUser(auth.uid, 'redemption', 'Your redemption request was submitted and is awaiting manager approval.');
+  await notifyManagers('redemption', `${auth.token.name || 'A driver'} requested to redeem "${rewardName}" - needs approval.`);
 
   await logActivity({
     actorId: auth.uid,
@@ -103,14 +102,13 @@ async function resolveRedemptionLogic(auth, data) {
     });
   });
 
-  await db.collection('users').doc(resolvedRequest.userId).collection('notifications').add({
-    type: 'redemption',
-    message: decision === 'approved'
+  await notifyUser(
+    resolvedRequest.userId,
+    'redemption',
+    decision === 'approved'
       ? `Your redemption for "${resolvedRequest.rewardName}" was approved!`
-      : `Your redemption for "${resolvedRequest.rewardName}" was not approved.`,
-    read: false,
-    createdAt: admin.firestore.Timestamp.now(),
-  });
+      : `Your redemption for "${resolvedRequest.rewardName}" was not approved.`
+  );
 
   await logActivity({
     actorId: auth.uid,

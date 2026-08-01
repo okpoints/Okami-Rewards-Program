@@ -1,14 +1,5 @@
 const { db, admin } = require('./admin');
-
-async function notifyManagers(message) {
-  const managersSnap = await db.collection('users').where('role', 'in', ['manager', 'admin']).get();
-  const batch = db.batch();
-  managersSnap.docs.forEach((doc) => {
-    const notifRef = db.collection('users').doc(doc.id).collection('notifications').doc();
-    batch.set(notifRef, { type: 'syncFailure', message, read: false, createdAt: admin.firestore.Timestamp.now() });
-  });
-  await batch.commit();
-}
+const { notifyManagers } = require('./notify');
 
 // One status doc so the dashboard can show "sync failed" instead of drivers
 // just quietly not seeing updated points with no explanation. The weekly
@@ -38,6 +29,7 @@ async function runCortexSyncWithStatusTracking(syncCortexFile, { notifyOnFailure
     );
     if (notifyOnFailure) {
       await notifyManagers(
+        'syncFailure',
         `Weekly Cortex sync failed: ${err.message || 'unknown error'}. Use "Sync Now" once it's fixed, or check the Drive folder.`
       );
     }

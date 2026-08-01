@@ -1,6 +1,7 @@
 const { HttpsError } = require('firebase-functions/v2/https');
 const { db, admin } = require('./admin');
 const { logActivity } = require('./activityLog');
+const { notifyUser } = require('./notify');
 
 const VALID_ROLES = ['associate', 'manager', 'admin'];
 
@@ -35,12 +36,7 @@ async function setUserRoleLogic(auth, data, requireRole) {
   }
   await userRef.update(updates);
 
-  await db.collection('users').doc(userId).collection('notifications').add({
-    type: 'roleChange',
-    message: `Your account role was changed to ${role}. Log out and back in to see the change take effect.`,
-    read: false,
-    createdAt: admin.firestore.Timestamp.now(),
-  });
+  await notifyUser(userId, 'roleChange', `Your account role was changed to ${role}. Log out and back in to see the change take effect.`);
 
   await logActivity({
     actorId: auth.uid,
