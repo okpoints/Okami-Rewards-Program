@@ -29,6 +29,8 @@ const setRosterActive = httpsCallable(functions, 'setRosterActive');
 const setManagerPermission = httpsCallable(functions, 'setManagerPermission');
 const setUserRole = httpsCallable(functions, 'setUserRole');
 const createUserAccount = httpsCallable(functions, 'createUserAccount');
+const createInviteLink = httpsCallable(functions, 'createInviteLink');
+const revokeInviteLink = httpsCallable(functions, 'revokeInviteLink');
 const queryActivityLog = httpsCallable(functions, 'queryActivityLog');
 
 const BONUS_URGENCY = ['low', 'medium', 'high', 'very_high'];
@@ -287,6 +289,9 @@ export default function ManagerDashboard({ user, role, activeTab }) {
   const [aliasDrafts, setAliasDrafts] = useState({});
   const [newRosterEntry, setNewRosterEntry] = useState({ fullName: '' });
   const [newUserAccount, setNewUserAccount] = useState({ fullName: '', email: '', role: 'associate' });
+  const [newInvite, setNewInvite] = useState({ role: 'associate', label: '' });
+  const [inviteLinks, setInviteLinks] = useState([]);
+  const [lastGeneratedInvite, setLastGeneratedInvite] = useState('');
   const [activityFilters, setActivityFilters] = useState({ actorName: '', actorId: '', action: '', pageSize: 15 });
   const [roleAssignmentUserId, setRoleAssignmentUserId] = useState('');
   const [activityCursors, setActivityCursors] = useState([null]);
@@ -331,6 +336,9 @@ export default function ManagerDashboard({ user, role, activeTab }) {
     const unsubAdmins = onSnapshot(query(collection(db, 'users'), where('role', '==', 'admin')), (snap) => {
       setAdmins(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
+    const unsubInvites = onSnapshot(collection(db, 'inviteLinks'), (snap) => {
+      setInviteLinks(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
 
     return () => {
       unsubPending();
@@ -343,6 +351,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
       unsubFullRoster();
       unsubManagers();
       unsubAdmins();
+      unsubInvites();
     };
   }, []);
 
@@ -521,6 +530,37 @@ export default function ManagerDashboard({ user, role, activeTab }) {
       setNewUserAccount({ fullName: '', email: '', role: 'associate' });
     } catch (err) {
       setMessage(err.message);
+    }
+  }
+
+  async function handleCreateInviteLink(e) {
+    e.preventDefault();
+    setMessage('');
+    setLastGeneratedInvite('');
+    try {
+      const res = await createInviteLink(newInvite);
+      setLastGeneratedInvite(`${window.location.origin}/?invite=${res.data.token}`);
+      setNewInvite({ role: 'associate', label: '' });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleRevokeInviteLink(token) {
+    setMessage('');
+    try {
+      await revokeInviteLink({ token });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleCopyInviteLink(url) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setMessage('Invite link copied to clipboard.');
+    } catch {
+      setMessage('Could not copy automatically - select and copy the link manually.');
     }
   }
 
@@ -894,6 +934,72 @@ export default function ManagerDashboard({ user, role, activeTab }) {
             </div>
             <button className="btn btn-primary" type="submit">Create account</button>
           </form>
+        </div>
+      )}
+
+      {showAdminPanel && canCreateUsers && (
+        <div className="card">
+          <h2>Invite links</h2>
+          <p className="muted">
+            Generate a link so someone can sign up themselves and land with the role already set - no email needed
+            up front, and it skips the Cortex identity check since the link itself vouches for who they are. Links
+            expire after 7 days and work once. Admin can't be granted this way - only Employee or Manager.
+          </p>
+          <form onSubmit={handleCreateInviteLink} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 12 }}>
+            <div className="field">
+              <label>Role</label>
+              <select value={newInvite.role} onChange={(e) => setNewInvite({ ...newInvite, role: e.target.value })}>
+                <option value="associate">Employee</option>
+                <option value="manager">Manager</option>
+              </select>
+            </div>
+            <div className="field" style={{ flex: '1 1 200px' }}>
+              <label>Note (optional, for your own reference)</label>
+              <input
+                placeholder="e.g. Nick D - warehouse manager"
+                value={newInvite.label}
+                onChange={(e) => setNewInvite({ ...newInvite, label: e.target.value })}
+              />
+            </div>
+            <button className="btn btn-primary" type="submit">Generate link</button>
+          </form>
+
+          {lastGeneratedInvite && (
+            <div className="list-row" style={{ marginTop: 12 }}>
+              <span style={{ wordBreak: 'break-all', fontSize: 13 }}>{lastGeneratedInvite}</span>
+              <button className="btn btn-outline" onClick={() => handleCopyInviteLink(lastGeneratedInvite)}>Copy</button>
+            </div>
+          )}
+
+          {inviteLinks.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              {inviteLinks
+                .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+                .map((invite) => (
+                  <div className="list-row" key={invite.id}>
+                    <span>
+                      <span className="badge badge-pending" style={{ marginRight: 8 }}>{invite.role}</span>
+                      {invite.label || 'No note'}{' '}
+                      <span className="muted">
+                        ({invite.status}
+                        {invite.status === 'used' && invite.usedByName ? ` by ${invite.usedByName}` : ''})
+                      </span>
+                    </span>
+                    {invite.status === 'active' && (
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          className="btn btn-outline"
+                          onClick={() => handleCopyInviteLink(`${window.location.origin}/?invite=${invite.id}`)}
+                        >
+                          Copy link
+                        </button>
+                        <button className="btn btn-outline" onClick={() => handleRevokeInviteLink(invite.id)}>Revoke</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+            </div>
+          )}
         </div>
       )}
 

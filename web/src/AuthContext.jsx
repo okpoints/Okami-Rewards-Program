@@ -14,6 +14,15 @@ export function AuthProvider({ children }) {
   const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // For when this account's own role changes mid-session (e.g. redeeming
+  // an invite link right after signup, where the retry loop below might
+  // have already locked in the pre-invite default role).
+  async function refreshRole() {
+    if (!auth.currentUser) return;
+    const tokenResult = await auth.currentUser.getIdTokenResult(true);
+    if (tokenResult.claims.role) setRole(tokenResult.claims.role);
+  }
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (!firebaseUser) {
@@ -50,7 +59,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, role, loading }}>
+    <AuthContext.Provider value={{ user, role, loading, refreshRole }}>
       {children}
     </AuthContext.Provider>
   );

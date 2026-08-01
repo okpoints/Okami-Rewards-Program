@@ -40,6 +40,7 @@ const { requireRole } = require('./lib/roles');
 const { runCortexSyncWithStatusTracking } = require('./lib/syncStatus');
 const { setUserRoleLogic } = require('./lib/userRoles');
 const { createUserAccountLogic } = require('./lib/userCreation');
+const { createInviteLinkLogic, redeemInviteLinkLogic, revokeInviteLinkLogic } = require('./lib/inviteLinks');
 const { FIREBASE_ADMIN_SERVICE_ACCOUNT: DRIVE_SERVICE_ACCOUNT } = require('./lib/serviceAccount');
 
 exports.onUserCreate = onUserCreate;
@@ -126,6 +127,16 @@ exports.setUserRole = onCall({ serviceAccount: DRIVE_SERVICE_ACCOUNT }, (request
 exports.createUserAccount = onCall({ serviceAccount: DRIVE_SERVICE_ACCOUNT }, (request) =>
   createUserAccountLogic(request.auth, request.data, requireRole)
 );
+
+exports.createInviteLink = onCall((request) => createInviteLinkLogic(request.auth, request.data, requireRole));
+
+// setCustomUserClaims needs the Auth Admin service account, same as the
+// other role-mutating functions above.
+exports.redeemInviteLink = onCall({ serviceAccount: DRIVE_SERVICE_ACCOUNT }, (request) =>
+  redeemInviteLinkLogic(request.auth, request.data)
+);
+
+exports.revokeInviteLink = onCall((request) => revokeInviteLinkLogic(request.auth, request.data, requireRole));
 
 // The sanctioned way to browse the activity log - see firestore.rules for
 // why direct client reads are admin-only.

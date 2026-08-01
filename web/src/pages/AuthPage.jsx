@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -7,10 +7,12 @@ import {
 } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 import { auth, functions } from '../firebase';
+import { useAuth } from '../AuthContext';
 import OkamiLogo from '../components/OkamiLogo';
 
 const findRosterCandidates = httpsCallable(functions, 'findRosterCandidates');
 const requestIdentityLink = httpsCallable(functions, 'requestIdentityLink');
+const redeemInviteLink = httpsCallable(functions, 'redeemInviteLink');
 
 // After a brand-new driver signs up, we try to match them against the
 // Cortex roster so their point history gets linked instead of starting at
@@ -113,7 +115,9 @@ export function IdentityCheckStep({ suggestedName, onDone }) {
 }
 
 export default function AuthPage({ onSignupComplete }) {
-  const [mode, setMode] = useState('login'); // 'login' | 'signup'
+  const { refreshRole } = useAuth();
+  const [inviteToken] = useState(() => new URLSearchParams(window.location.search).get('invite'));
+  const [mode, setMode] = useState(inviteToken ? 'signup' : 'login'); // 'login' | 'signup'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -122,6 +126,10 @@ export default function AuthPage({ onSignupComplete }) {
   const [showPassword, setShowPassword] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [alreadyHasAccount, setAlreadyHasAccount] = useState(false);
+
+  useEffect(() => {
+    if (inviteToken) setMode('signup');
+  }, [inviteToken]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -132,7 +140,16 @@ export default function AuthPage({ onSignupComplete }) {
       if (mode === 'signup') {
         const cred = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(cred.user, { displayName: fullName });
-        onSignupComplete(fullName);
+        if (inviteToken) {
+          // The invite link supersedes the usual roster-matching flow -
+          // whoever holds the link is trusted to be who they say, so we
+          // skip straight to their (invite-granted) role instead of the
+          // "are you this person on Cortex?" identity check.
+          await redeemInviteLink({ token: inviteToken });
+          await refreshRole();
+        } else {
+          onSignupComplete(fullName);
+        }
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
@@ -180,6 +197,11 @@ export default function AuthPage({ onSignupComplete }) {
           <OkamiLogo size={40} />
         </div>
         <h1>{mode === 'login' ? 'Welcome back' : 'Create your account'}</h1>
+        {inviteToken && (
+          <p className="accent-text-green" style={{ textAlign: 'center', marginBottom: 14 }}>
+            You've been invited to join Okami Rewards - finish signing up below.
+          </p>
+        )}
         <form onSubmit={handleSubmit}>
           {mode === 'signup' && (
             <div className="field">
@@ -246,6 +268,7 @@ export default function AuthPage({ onSignupComplete }) {
             {busy ? 'Please wait...' : mode === 'login' ? 'Log in' : 'Sign up'}
           </button>
         </form>
+        {!inviteToken && (
         <p className="muted" style={{ marginTop: 16, textAlign: 'center' }}>
           {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
           <button
@@ -260,6 +283,7 @@ export default function AuthPage({ onSignupComplete }) {
             {mode === 'login' ? 'Sign up' : 'Log in'}
           </button>
         </p>
+        )}
       </div>
     </div>
   );
