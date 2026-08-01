@@ -674,7 +674,14 @@ export default function ManagerDashboard({ user, role, activeTab }) {
 
   return (
     <div>
-      {message && <div className="card"><p>{message}</p></div>}
+      {message && (
+        <div
+          className="card"
+          style={{ position: 'sticky', top: 10, zIndex: 20, borderColor: 'var(--color-danger)' }}
+        >
+          <p className="error-text" style={{ margin: 0 }}>{message}</p>
+        </div>
+      )}
 
       {!showAdminPanel && showSyncWarning && (
         <div className="card sync-warning-card">
