@@ -4,7 +4,8 @@ import {
   addDoc, updateDoc, deleteDoc,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { db, functions } from '../firebase';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { db, functions, auth } from '../firebase';
 import SearchableSelect from '../components/SearchableSelect';
 import RewardImageUpload from '../components/RewardImageUpload';
 
@@ -27,6 +28,7 @@ const createRosterEntry = httpsCallable(functions, 'createRosterEntry');
 const setRosterActive = httpsCallable(functions, 'setRosterActive');
 const setManagerPermission = httpsCallable(functions, 'setManagerPermission');
 const setUserRole = httpsCallable(functions, 'setUserRole');
+const createUserAccount = httpsCallable(functions, 'createUserAccount');
 const queryActivityLog = httpsCallable(functions, 'queryActivityLog');
 
 const BONUS_URGENCY = ['low', 'medium', 'high', 'very_high'];
@@ -34,6 +36,7 @@ const ANNOUNCEMENT_URGENCY = ['low', 'medium', 'high', 'critical'];
 const PERMISSION_LABELS = {
   viewActivityLog: 'View activity log',
   manageManagerPermissions: 'Manage other managers’ permissions',
+  createUserAccounts: 'Create new user accounts',
 };
 
 function BonusTaskCard({ task, associatesById }) {
@@ -283,6 +286,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
   const [adjustment, setAdjustment] = useState({ userId: '', delta: '', reason: '' });
   const [aliasDrafts, setAliasDrafts] = useState({});
   const [newRosterEntry, setNewRosterEntry] = useState({ fullName: '' });
+  const [newUserAccount, setNewUserAccount] = useState({ fullName: '', email: '', role: 'associate' });
   const [activityFilters, setActivityFilters] = useState({ actorName: '', actorId: '', action: '', pageSize: 15 });
   const [roleAssignmentUserId, setRoleAssignmentUserId] = useState('');
   const [activityCursors, setActivityCursors] = useState([null]);
@@ -294,6 +298,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
   const associatesById = Object.fromEntries(associates.map((a) => [a.id, a]));
   const canManagePermissions = role === 'admin' || myProfile?.permissions?.manageManagerPermissions;
   const canViewActivityLog = role === 'admin' || myProfile?.permissions?.viewActivityLog;
+  const canCreateUsers = role === 'admin' || myProfile?.permissions?.createUserAccounts;
 
   useEffect(() => {
     const unsubPending = onSnapshot(query(collection(db, 'redemptionRequests'), where('status', '==', 'pending')), (snap) => {
@@ -506,6 +511,19 @@ export default function ManagerDashboard({ user, role, activeTab }) {
     }
   }
 
+  async function handleCreateUserAccount(e) {
+    e.preventDefault();
+    setMessage('');
+    try {
+      await createUserAccount(newUserAccount);
+      await sendPasswordResetEmail(auth, newUserAccount.email);
+      setMessage(`Account created for ${newUserAccount.email} - a "set your password" email was sent to them.`);
+      setNewUserAccount({ fullName: '', email: '', role: 'associate' });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
   async function handleTogglePermission(managerId, permission, enabled) {
     setMessage('');
     try {
@@ -575,7 +593,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
   const isStale = daysSinceSuccess === null || daysSinceSuccess > SYNC_STALE_DAYS;
   const showSyncWarning = isCurrentlyFailing || isStale;
   const showAdminPanel = activeTab === 'admin';
-  const hasAnyAdminAccess = role === 'admin' || canManagePermissions || canViewActivityLog;
+  const hasAnyAdminAccess = role === 'admin' || canManagePermissions || canViewActivityLog || canCreateUsers;
 
   return (
     <div>
@@ -835,7 +853,47 @@ export default function ManagerDashboard({ user, role, activeTab }) {
       {showAdminPanel && !hasAnyAdminAccess && (
         <div className="card">
           <h2>Admin panel</h2>
-          <p className="muted">You haven't been granted any admin permissions yet - ask an admin to delegate activity log access or manager-permission management to you.</p>
+          <p className="muted">You haven't been granted any admin permissions yet - ask an admin to delegate activity log access, account creation, or manager-permission management to you.</p>
+        </div>
+      )}
+
+      {showAdminPanel && canCreateUsers && (
+        <div className="card">
+          <h2>Create user account</h2>
+          <p className="muted">
+            For onboarding someone before they've signed up themselves. They'll get an email to set their own
+            password - admin accounts can only be created by promoting an existing account from Privilege assignment.
+          </p>
+          <form onSubmit={handleCreateUserAccount} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 12 }}>
+            <div className="field" style={{ flex: '1 1 200px' }}>
+              <label>Full name</label>
+              <input
+                value={newUserAccount.fullName}
+                onChange={(e) => setNewUserAccount({ ...newUserAccount, fullName: e.target.value })}
+                required
+              />
+            </div>
+            <div className="field" style={{ flex: '1 1 200px' }}>
+              <label>Email</label>
+              <input
+                type="email"
+                value={newUserAccount.email}
+                onChange={(e) => setNewUserAccount({ ...newUserAccount, email: e.target.value })}
+                required
+              />
+            </div>
+            <div className="field">
+              <label>Role</label>
+              <select
+                value={newUserAccount.role}
+                onChange={(e) => setNewUserAccount({ ...newUserAccount, role: e.target.value })}
+              >
+                <option value="associate">Employee</option>
+                <option value="manager">Manager</option>
+              </select>
+            </div>
+            <button className="btn btn-primary" type="submit">Create account</button>
+          </form>
         </div>
       )}
 

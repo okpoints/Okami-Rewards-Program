@@ -39,6 +39,7 @@ const {
 const { requireRole } = require('./lib/roles');
 const { runCortexSyncWithStatusTracking } = require('./lib/syncStatus');
 const { setUserRoleLogic } = require('./lib/userRoles');
+const { createUserAccountLogic } = require('./lib/userCreation');
 const { FIREBASE_ADMIN_SERVICE_ACCOUNT: DRIVE_SERVICE_ACCOUNT } = require('./lib/serviceAccount');
 
 exports.onUserCreate = onUserCreate;
@@ -118,6 +119,12 @@ exports.setManagerPermission = onCall((request) => setManagerPermissionLogic(req
 // permission to change someone's role.
 exports.setUserRole = onCall({ serviceAccount: DRIVE_SERVICE_ACCOUNT }, (request) =>
   setUserRoleLogic(request.auth, request.data, requireRole)
+);
+
+// createUser + setCustomUserClaims both need the same Auth Admin
+// permission as the functions above.
+exports.createUserAccount = onCall({ serviceAccount: DRIVE_SERVICE_ACCOUNT }, (request) =>
+  createUserAccountLogic(request.auth, request.data, requireRole)
 );
 
 // The sanctioned way to browse the activity log - see firestore.rules for

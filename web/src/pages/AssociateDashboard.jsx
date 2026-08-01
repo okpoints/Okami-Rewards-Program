@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { collection, doc, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../firebase';
+import { IdentityCheckStep } from './AuthPage';
 
 const requestRedemption = httpsCallable(functions, 'requestRedemption');
 const enrollInBonusTask = httpsCallable(functions, 'enrollInBonusTask');
@@ -145,6 +146,7 @@ export default function AssociateDashboard({ user }) {
   const [bonusTasks, setBonusTasks] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [message, setMessage] = useState('');
+  const [showIdentityCheck, setShowIdentityCheck] = useState(false);
 
   useEffect(() => {
     const unsubProfile = onSnapshot(doc(db, 'users', user.uid), (snap) => {
@@ -275,8 +277,15 @@ export default function AssociateDashboard({ user }) {
 
         {profile?.rosterId ? (
           <p className="muted" style={{ marginTop: 12 }}>Linked to your Cortex history.</p>
+        ) : showIdentityCheck ? (
+          <div style={{ marginTop: 12 }}>
+            <IdentityCheckStep suggestedName={profile?.fullName || ''} onDone={() => setShowIdentityCheck(false)} />
+          </div>
         ) : (
-          <p className="muted" style={{ marginTop: 12 }}>Not yet linked to Cortex history - a manager needs to confirm your identity.</p>
+          <p className="muted" style={{ marginTop: 12 }}>
+            Not yet linked to Cortex history - a manager needs to confirm your identity.{' '}
+            <button className="toggle-link" onClick={() => setShowIdentityCheck(true)}>Check now</button>
+          </p>
         )}
       </div>
 

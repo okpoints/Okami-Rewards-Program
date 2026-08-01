@@ -4,7 +4,7 @@ const { logActivity } = require('./activityLog');
 
 // Extensible - add new permission names here as they get defined (e.g.
 // editDriverAccounts, adjustPointBalances, viewManagerActivityLogs).
-const KNOWN_PERMISSIONS = ['viewActivityLog', 'manageManagerPermissions'];
+const KNOWN_PERMISSIONS = ['viewActivityLog', 'manageManagerPermissions', 'createUserAccounts'];
 
 // This one is admin-exclusive - a manager who's been delegated the power
 // to manage other managers' permissions still can't hand that same power
