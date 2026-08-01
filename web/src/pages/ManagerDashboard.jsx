@@ -285,6 +285,8 @@ export default function ManagerDashboard({ user, role, activeTab }) {
   const [newTask, setNewTask] = useState({ title: '', description: '', urgency: 'medium', openings: 1, pointValue: 50 });
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', description: '', urgency: 'medium', driversNeeded: 1, pointValue: 50 });
   const [newReward, setNewReward] = useState({ name: '', pointCost: 500, imageUrl: '' });
+  const [editingRewardId, setEditingRewardId] = useState(null);
+  const [rewardDraft, setRewardDraft] = useState({ name: '', pointCost: '' });
   const [adjustment, setAdjustment] = useState({ userId: '', delta: '', reason: '' });
   const [aliasDrafts, setAliasDrafts] = useState({});
   const [newRosterEntry, setNewRosterEntry] = useState({ fullName: '' });
@@ -462,6 +464,24 @@ export default function ManagerDashboard({ user, role, activeTab }) {
     setMessage('');
     try {
       await updateDoc(doc(db, 'rewards', rewardId), { imageUrl });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  function handleStartEditReward(reward) {
+    setEditingRewardId(reward.id);
+    setRewardDraft({ name: reward.name, pointCost: reward.pointCost });
+  }
+
+  async function handleSaveRewardEdit(rewardId) {
+    setMessage('');
+    try {
+      await updateDoc(doc(db, 'rewards', rewardId), {
+        name: rewardDraft.name,
+        pointCost: Number(rewardDraft.pointCost),
+      });
+      setEditingRewardId(null);
     } catch (err) {
       setMessage(err.message);
     }
@@ -802,20 +822,41 @@ export default function ManagerDashboard({ user, role, activeTab }) {
         {rewards.length === 0 && <p className="muted">No rewards yet - seed the catalog above.</p>}
         {rewards.map((reward) => (
           <div className="list-row" key={reward.id} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                {reward.imageUrl && (
-                  <img src={reward.imageUrl} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 6 }} />
-                )}
-                {reward.name} - {reward.pointCost} pts {!reward.active && '(inactive)'}
-              </span>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-outline" onClick={() => handleToggleRewardActive(reward)}>
-                  {reward.active ? 'Deactivate' : 'Activate'}
-                </button>
-                <button className="btn btn-outline" onClick={() => handleDeleteReward(reward.id)}>Delete</button>
+            {editingRewardId === reward.id ? (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div className="field" style={{ flex: '1 1 180px' }}>
+                  <label>Reward name</label>
+                  <input value={rewardDraft.name} onChange={(e) => setRewardDraft({ ...rewardDraft, name: e.target.value })} />
+                </div>
+                <div className="field" style={{ width: 120 }}>
+                  <label>Point cost</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={rewardDraft.pointCost}
+                    onChange={(e) => setRewardDraft({ ...rewardDraft, pointCost: e.target.value })}
+                  />
+                </div>
+                <button className="btn btn-primary" onClick={() => handleSaveRewardEdit(reward.id)}>Save</button>
+                <button className="btn btn-outline" onClick={() => setEditingRewardId(null)}>Cancel</button>
               </div>
-            </div>
+            ) : (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {reward.imageUrl && (
+                    <img src={reward.imageUrl} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 6 }} />
+                  )}
+                  {reward.name} - {reward.pointCost} pts {!reward.active && '(inactive)'}
+                </span>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn-outline" onClick={() => handleStartEditReward(reward)}>Edit</button>
+                  <button className="btn btn-outline" onClick={() => handleToggleRewardActive(reward)}>
+                    {reward.active ? 'Deactivate' : 'Activate'}
+                  </button>
+                  <button className="btn btn-outline" onClick={() => handleDeleteReward(reward.id)}>Delete</button>
+                </div>
+              </div>
+            )}
             <RewardImageUpload onUploaded={(url) => handleChangeRewardImage(reward.id, url)} />
           </div>
         ))}
