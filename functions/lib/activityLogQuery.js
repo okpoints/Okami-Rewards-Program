@@ -1,6 +1,8 @@
 const { HttpsError } = require('firebase-functions/v2/https');
 const { db, admin } = require('./admin');
 
+const ONE_YEAR_MS = 1000 * 60 * 60 * 24 * 365;
+
 // The one sanctioned way to browse the activity log. Direct Firestore
 // reads of the collection are admin-only (see firestore.rules) because
 // "a manager sees driver activity but never admin activity, only if
@@ -9,7 +11,7 @@ const { db, admin } = require('./admin');
 async function queryActivityLogLogic(auth, data) {
   if (!auth) throw new HttpsError('unauthenticated', 'You must be signed in.');
   const role = auth.token.role;
-  const { actorName, actorId, actorPosition, action, dateFrom, dateTo, limit, startAfterId } = data || {};
+  const { actorName, actorId, actorPosition, action, dateFrom, dateTo, limit, startAfterId, includeHidden } = data || {};
 
   if (role === 'associate' || !role) {
     throw new HttpsError('permission-denied', 'Drivers do not have access to the activity log.');
@@ -23,7 +25,17 @@ async function queryActivityLogLogic(auth, data) {
   }
 
   let query = db.collection('activityLog').orderBy('createdAt', 'desc');
-  if (dateFrom) query = query.where('createdAt', '>=', admin.firestore.Timestamp.fromDate(new Date(dateFrom)));
+
+  // Nothing is ever deleted, but the default view only reaches back 1 year -
+  // older entries are still there, just "hidden" behind this default floor.
+  // Only an admin can lift it (never delegable to a manager, even one with
+  // viewActivityLog), and even then an explicit dateFrom still wins.
+  const canIncludeHidden = includeHidden && role === 'admin';
+  if (dateFrom) {
+    query = query.where('createdAt', '>=', admin.firestore.Timestamp.fromDate(new Date(dateFrom)));
+  } else if (!canIncludeHidden) {
+    query = query.where('createdAt', '>=', admin.firestore.Timestamp.fromMillis(Date.now() - ONE_YEAR_MS));
+  }
   if (dateTo) query = query.where('createdAt', '<=', admin.firestore.Timestamp.fromDate(new Date(dateTo)));
   if (actorId) query = query.where('actorId', '==', actorId);
 

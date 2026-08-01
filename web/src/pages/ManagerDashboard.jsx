@@ -294,7 +294,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
   const [newInvite, setNewInvite] = useState({ role: 'associate', label: '' });
   const [inviteLinks, setInviteLinks] = useState([]);
   const [lastGeneratedInvite, setLastGeneratedInvite] = useState('');
-  const [activityFilters, setActivityFilters] = useState({ actorName: '', actorId: '', action: '', pageSize: 15 });
+  const [activityFilters, setActivityFilters] = useState({ actorName: '', actorId: '', action: '', pageSize: 15, includeHidden: false });
   const [roleAssignmentUserId, setRoleAssignmentUserId] = useState('');
   const [activityCursors, setActivityCursors] = useState([null]);
   const [activityPage, setActivityPage] = useState(0);
@@ -615,6 +615,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
         action: activityFilters.action || undefined,
         limit: Number(activityFilters.pageSize),
         startAfterId: cursors[pageIndex] || undefined,
+        includeHidden: activityFilters.includeHidden || undefined,
       });
       setActivityEntries(res.data.entries);
       setActivityHasMore(res.data.hasMore);
@@ -1189,8 +1190,22 @@ export default function ManagerDashboard({ user, role, activeTab }) {
                 <option value={50}>50</option>
               </select>
             </div>
+            {role === 'admin' && (
+              <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 14, marginBottom: 10 }}>
+                <input
+                  type="checkbox"
+                  checked={activityFilters.includeHidden}
+                  onChange={(e) => setActivityFilters({ ...activityFilters, includeHidden: e.target.checked })}
+                />
+                Include entries older than 1 year
+              </label>
+            )}
             <button className="btn btn-primary" type="submit">Search</button>
           </form>
+          <p className="muted" style={{ marginTop: -8, marginBottom: 12 }}>
+            Nothing is ever deleted - entries just drop out of search after 1 year by default.
+            {role === 'admin' ? '' : ' An admin can include those older entries when needed.'}
+          </p>
           {activityEntries === null && <p className="muted">Run a search to see recent activity.</p>}
           {activityEntries?.length === 0 && <p className="muted">No matching entries.</p>}
           {activityEntries?.map((entry) => (
