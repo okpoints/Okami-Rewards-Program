@@ -28,7 +28,7 @@ export default function ProfilePage({ user }) {
         const data = snap.data();
         setProfile(data || null);
         setPhotoUrlDraft(data?.photoUrl || '');
-        setLoadError(data ? '' : 'No account record was found for this login.');
+        setLoadError(data ? '' : `No account record was found for this login (uid: ${user.uid}).`);
       },
       (err) => setLoadError(err.message)
     );
