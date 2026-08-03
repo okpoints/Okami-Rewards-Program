@@ -19,13 +19,19 @@ export default function ProfilePage({ user }) {
   const [photoUrlDraft, setPhotoUrlDraft] = useState('');
   const [editing, setEditing] = useState(false);
   const [message, setMessage] = useState('');
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'users', user.uid), (snap) => {
-      const data = snap.data();
-      setProfile(data);
-      setPhotoUrlDraft(data?.photoUrl || '');
-    });
+    const unsub = onSnapshot(
+      doc(db, 'users', user.uid),
+      (snap) => {
+        const data = snap.data();
+        setProfile(data || null);
+        setPhotoUrlDraft(data?.photoUrl || '');
+        if (!data) setLoadError('No account record was found for this login.');
+      },
+      (err) => setLoadError(err.message)
+    );
     return unsub;
   }, [user.uid]);
 
@@ -70,6 +76,13 @@ export default function ProfilePage({ user }) {
     }
   }
 
+  if (loadError) {
+    return (
+      <div className="card">
+        <p className="error-text">Couldn't load your profile: {loadError}</p>
+      </div>
+    );
+  }
   if (!profile) return null;
 
   const latestLedgerEntry = [...ledgerEntries].sort((a, b) => (b.week || '').localeCompare(a.week || ''))[0];

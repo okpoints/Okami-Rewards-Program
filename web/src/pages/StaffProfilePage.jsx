@@ -37,13 +37,19 @@ export default function StaffProfilePage({ user, role }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({ fullName: '', photoUrl: '' });
   const [message, setMessage] = useState('');
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'users', user.uid), (snap) => {
-      const data = snap.data();
-      setProfile(data);
-      setDraft({ fullName: data?.fullName || '', photoUrl: data?.photoUrl || '' });
-    });
+    const unsub = onSnapshot(
+      doc(db, 'users', user.uid),
+      (snap) => {
+        const data = snap.data();
+        setProfile(data || null);
+        setDraft({ fullName: data?.fullName || '', photoUrl: data?.photoUrl || '' });
+        if (!data) setLoadError('No account record was found for this login.');
+      },
+      (err) => setLoadError(err.message)
+    );
     return unsub;
   }, [user.uid]);
 
@@ -80,6 +86,13 @@ export default function StaffProfilePage({ user, role }) {
     }
   }
 
+  if (loadError) {
+    return (
+      <div className="card">
+        <p className="error-text">Couldn't load your profile: {loadError}</p>
+      </div>
+    );
+  }
   if (!profile) return null;
 
   const privileges = [
