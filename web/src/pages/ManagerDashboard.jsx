@@ -147,7 +147,7 @@ function AnnouncementCard({ announcement, associatesById }) {
             ({announcement.urgency}, needs {announcement.driversNeeded}, {announcement.pointValue} pts)
           </span>
         </div>
-        <button className="btn btn-outline" onClick={handleDelete}>Archive</button>
+        <button className="btn btn-outline" onClick={handleDelete}>Delete</button>
       </div>
       {announcement.description && <p className="muted">{announcement.description}</p>}
 

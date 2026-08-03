@@ -62,8 +62,6 @@ async function updateAnnouncementLogic(auth, data, requireRole) {
   return { success: true };
 }
 
-// "Delete" archives rather than erases, so history stays retained for the
-// log view - it just comes off the live list drivers browse.
 async function deleteAnnouncementLogic(auth, data, requireRole) {
   const role = requireRole(auth, ['manager', 'admin']);
   const { announcementId } = data || {};
@@ -73,7 +71,7 @@ async function deleteAnnouncementLogic(auth, data, requireRole) {
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('not-found', 'Announcement not found.');
 
-  await ref.update({ active: false, archivedAt: admin.firestore.Timestamp.now() });
+  await ref.delete();
 
   await logActivity({
     actorId: auth.uid, actorName: auth.token.name || 'Unknown', actorPosition: role,
