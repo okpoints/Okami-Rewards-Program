@@ -46,7 +46,7 @@ export default function StaffProfilePage({ user, role }) {
         const data = snap.data();
         setProfile(data || null);
         setDraft({ fullName: data?.fullName || '', photoUrl: data?.photoUrl || '' });
-        if (!data) setLoadError('No account record was found for this login.');
+        setLoadError(data ? '' : 'No account record was found for this login.');
       },
       (err) => setLoadError(err.message)
     );
