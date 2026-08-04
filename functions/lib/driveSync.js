@@ -89,6 +89,12 @@ async function syncCortexFile() {
 
   const csvText = await downloadCsv(drive, file.id);
   const rows = parse(csvText, { columns: true, skip_empty_lines: true, bom: true, trim: true });
+  if (rows.length > 0) {
+    // Logged so a header mismatch (extra whitespace, a renamed column, etc.)
+    // is visible in Cloud Functions logs instead of just silently matching
+    // nothing.
+    console.log(`Cortex CSV "${file.name}" header keys:`, JSON.stringify(Object.keys(rows[0])));
+  }
 
   const batch = db.batch();
   let rosterUpdates = 0;
@@ -127,6 +133,16 @@ async function syncCortexFile() {
     );
 
     rosterUpdates += 1;
+  }
+
+  // Zero matches almost always means a column-header mismatch, not a
+  // genuinely empty week - fail loudly instead of quietly marking this
+  // week "imported" (which would silently block ever retrying it).
+  if (rosterUpdates === 0) {
+    throw new Error(
+      `Found "${file.name}" with ${rows.length} row(s), but none had a usable Transporter ID, Delivery Associate, ` +
+      'and Overall Score - check the CSV\'s column headers match exactly.'
+    );
   }
 
   batch.set(importRef, {
