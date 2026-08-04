@@ -675,6 +675,18 @@ export default function ManagerDashboard({ user, role, activeTab }) {
   const showAdminPanel = activeTab === 'admin';
   const hasAnyAdminAccess = role === 'admin' || canManagePermissions || canViewActivityLog;
 
+  // Latest roster-tied invite per roster entry, so the Roster card can show
+  // whether an invite is still pending or was revoked - once one is
+  // actually accepted, entry.linkedUserId/linkedAt take over instead.
+  const latestRosterInviteById = {};
+  for (const invite of inviteLinks) {
+    if (!invite.rosterId) continue;
+    const existing = latestRosterInviteById[invite.rosterId];
+    if (!existing || (invite.createdAt?.seconds || 0) > (existing.createdAt?.seconds || 0)) {
+      latestRosterInviteById[invite.rosterId] = invite;
+    }
+  }
+
   const rosterSearchLower = rosterSearch.trim().toLowerCase();
   const filteredRoster = rosterSearchLower
     ? roster.filter((entry) => {
@@ -1002,7 +1014,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
                 {entry.cortexFullName}{' '}
                 <span className="muted">
                   ({entry.linkedUserId
-                    ? `signed up${entry.linkedAt ? ' ' + toDate(entry.linkedAt).toLocaleDateString() : ''}`
+                    ? `signed up${entry.linkedAt ? ' ' + toDate(entry.linkedAt).toLocaleString() : ''}`
                     : 'not signed up yet'}
                   {entry.active === false ? ', inactive' : ''})
                 </span>
@@ -1023,6 +1035,15 @@ export default function ManagerDashboard({ user, role, activeTab }) {
               />
               <button className="btn btn-outline" onClick={() => handleAddAlias(entry.id)}>Add alias</button>
             </div>
+            {!entry.linkedUserId && latestRosterInviteById[entry.id] && (
+              <p className="muted">
+                {latestRosterInviteById[entry.id].status === 'active' &&
+                  `Invite sent ${toDate(latestRosterInviteById[entry.id].createdAt).toLocaleString()} - not yet accepted.`}
+                {latestRosterInviteById[entry.id].status === 'revoked' && 'Previous invite was revoked.'}
+                {latestRosterInviteById[entry.id].status === 'used' &&
+                  `Invite accepted ${latestRosterInviteById[entry.id].usedAt ? toDate(latestRosterInviteById[entry.id].usedAt).toLocaleString() : ''} - waiting on account setup.`}
+              </p>
+            )}
             {!entry.linkedUserId && (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 <input
@@ -1032,7 +1053,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
                   style={{ flex: 1 }}
                 />
                 <button className="btn btn-outline" onClick={() => handleSendRosterInvite(entry.id)}>
-                  Generate invite link
+                  {latestRosterInviteById[entry.id]?.status === 'active' ? 'Generate new invite link' : 'Generate invite link'}
                 </button>
               </div>
             )}
