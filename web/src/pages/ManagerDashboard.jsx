@@ -8,6 +8,7 @@ import { sendPasswordResetEmail } from 'firebase/auth';
 import { db, functions, auth } from '../firebase';
 import SearchableSelect from '../components/SearchableSelect';
 import RewardImageUpload from '../components/RewardImageUpload';
+import { rewardIcon } from '../rewardIcon';
 
 const resolveRedemption = httpsCallable(functions, 'resolveRedemption');
 const seedInitialRewards = httpsCallable(functions, 'seedInitialRewards');
@@ -951,61 +952,69 @@ export default function ManagerDashboard({ user, role, activeTab }) {
           />
         </div>
         {rewards.length === 0 && <p className="muted">No rewards yet - seed the catalog above.</p>}
-        {rewards.map((reward) => (
-          <div className="list-row" key={reward.id} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
-            {editingRewardId === reward.id ? (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                <div className="field" style={{ flex: '1 1 180px' }}>
-                  <label>Reward name</label>
-                  <input value={rewardDraft.name} onChange={(e) => setRewardDraft({ ...rewardDraft, name: e.target.value })} />
-                </div>
-                <div className="field" style={{ width: 120 }}>
-                  <label>Point cost</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={rewardDraft.pointCost}
-                    onChange={(e) => setRewardDraft({ ...rewardDraft, pointCost: e.target.value })}
-                  />
-                </div>
-                <button className="btn btn-primary" onClick={() => handleSaveRewardEdit(reward.id)}>Save</button>
-                <button className="btn btn-outline" onClick={() => setEditingRewardId(null)}>Cancel</button>
+        <div className="grid">
+          {rewards.map((reward) => (
+            <div className={`reward-card${!reward.active ? ' reward-card-locked' : ''}`} key={reward.id}>
+              <div className="reward-image">
+                {reward.imageUrl ? (
+                  <img src={reward.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 10 }} />
+                ) : (
+                  <span className="reward-icon">{rewardIcon(reward.name)}</span>
+                )}
               </div>
-            ) : (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  {reward.imageUrl && (
-                    <img src={reward.imageUrl} alt="" style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 6 }} />
-                  )}
-                  {reward.name} - {reward.pointCost} pts {!reward.active && '(inactive)'}
-                </span>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn btn-outline" onClick={() => handleStartEditReward(reward)}>Edit</button>
-                  <button className="btn btn-outline" onClick={() => handleToggleRewardActive(reward)}>
-                    {reward.active ? 'Deactivate' : 'Activate'}
-                  </button>
-                  <button className="btn btn-outline" onClick={() => handleDeleteReward(reward.id)}>Delete</button>
-                </div>
+              {editingRewardId === reward.id ? (
+                <>
+                  <div className="field">
+                    <label>Reward name</label>
+                    <input value={rewardDraft.name} onChange={(e) => setRewardDraft({ ...rewardDraft, name: e.target.value })} />
+                  </div>
+                  <div className="field">
+                    <label>Point cost</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={rewardDraft.pointCost}
+                      onChange={(e) => setRewardDraft({ ...rewardDraft, pointCost: e.target.value })}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn btn-primary" onClick={() => handleSaveRewardEdit(reward.id)}>Save</button>
+                    <button className="btn btn-outline" onClick={() => setEditingRewardId(null)}>Cancel</button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="reward-name">{reward.name} {!reward.active && '(inactive)'}</div>
+                  <div className="reward-cost">{reward.pointCost} pts</div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button className="btn btn-outline" onClick={() => handleStartEditReward(reward)}>Edit</button>
+                    <button className="btn btn-outline" onClick={() => handleToggleRewardActive(reward)}>
+                      {reward.active ? 'Deactivate' : 'Activate'}
+                    </button>
+                    <button className="btn btn-outline" onClick={() => handleDeleteReward(reward.id)}>Delete</button>
+                  </div>
+                </>
+              )}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <RewardImageUpload onUploaded={(url) => handleChangeRewardImage(reward.id, url)} />
               </div>
-            )}
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <RewardImageUpload onUploaded={(url) => handleChangeRewardImage(reward.id, url)} />
-              <span className="muted">or</span>
-              <input
-                placeholder="Paste an image URL..."
-                value={rewardImageUrlDrafts[reward.id] ?? ''}
-                onChange={(e) => setRewardImageUrlDrafts((prev) => ({ ...prev, [reward.id]: e.target.value }))}
-                style={{ flex: '1 1 200px' }}
-              />
-              <button
-                className="btn btn-outline"
-                onClick={() => handleChangeRewardImage(reward.id, rewardImageUrlDrafts[reward.id] || '')}
-              >
-                Use URL
-              </button>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  placeholder="Paste an image URL..."
+                  value={rewardImageUrlDrafts[reward.id] ?? ''}
+                  onChange={(e) => setRewardImageUrlDrafts((prev) => ({ ...prev, [reward.id]: e.target.value }))}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  className="btn btn-outline"
+                  onClick={() => handleChangeRewardImage(reward.id, rewardImageUrlDrafts[reward.id] || '')}
+                >
+                  Use URL
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       <div className="card">

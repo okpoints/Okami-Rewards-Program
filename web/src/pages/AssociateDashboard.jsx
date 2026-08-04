@@ -3,6 +3,7 @@ import { collection, doc, onSnapshot, query, where, orderBy } from 'firebase/fir
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../firebase';
 import { IdentityCheckStep } from './AuthPage';
+import { rewardIcon } from '../rewardIcon';
 
 const requestRedemption = httpsCallable(functions, 'requestRedemption');
 const enrollInBonusTask = httpsCallable(functions, 'enrollInBonusTask');
@@ -102,26 +103,6 @@ function AnnouncementEntry({ announcement, userId }) {
       {error && <p className="error-text">{error}</p>}
     </div>
   );
-}
-
-const REWARD_ICON_RULES = [
-  [/mug|cup/i, '☕'],
-  [/tumbler|bottle|thermos/i, '🥤'],
-  [/gift ?card/i, '💳'],
-  [/fire ?stick|tv|streaming/i, '📺'],
-  [/headphone|earbud|audio/i, '🎧'],
-  [/backpack|bag/i, '🎒'],
-  [/roomba|vacuum|robot/i, '🤖'],
-  [/trip|vacation|disney|flight|travel/i, '✈️'],
-  [/watch/i, '⌚'],
-  [/shirt|hoodie|jacket|apparel|hat/i, '👕'],
-  [/game|xbox|playstation|nintendo/i, '🎮'],
-  [/gift ?basket|snack|food/i, '🎁'],
-];
-
-function rewardIcon(name) {
-  const match = REWARD_ICON_RULES.find(([pattern]) => pattern.test(name || ''));
-  return match ? match[1] : '🎁';
 }
 
 function StatusBadge({ status }) {
