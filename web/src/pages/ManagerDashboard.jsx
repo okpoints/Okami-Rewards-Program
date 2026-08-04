@@ -290,6 +290,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
   const [newTask, setNewTask] = useState({ title: '', description: '', urgency: 'medium', openings: 1, pointValue: 50 });
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', description: '', urgency: 'medium', driversNeeded: 1, pointValue: 50 });
   const [newReward, setNewReward] = useState({ name: '', pointCost: 500, imageUrl: '' });
+  const [rewardImageUrlDrafts, setRewardImageUrlDrafts] = useState({});
   const [editingRewardId, setEditingRewardId] = useState(null);
   const [rewardDraft, setRewardDraft] = useState({ name: '', pointCost: '' });
   const [adjustment, setAdjustment] = useState({ userId: '', delta: '', reason: '' });
@@ -912,11 +913,18 @@ export default function ManagerDashboard({ user, role, activeTab }) {
           </div>
           <button className="btn btn-primary" type="submit">Add reward</button>
         </form>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
           {newReward.imageUrl && (
             <img src={newReward.imageUrl} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8 }} />
           )}
           <RewardImageUpload onUploaded={(url) => setNewReward({ ...newReward, imageUrl: url })} />
+          <span className="muted">or</span>
+          <input
+            placeholder="Paste an image URL..."
+            value={newReward.imageUrl}
+            onChange={(e) => setNewReward({ ...newReward, imageUrl: e.target.value })}
+            style={{ flex: '1 1 240px' }}
+          />
         </div>
         {rewards.length === 0 && <p className="muted">No rewards yet - seed the catalog above.</p>}
         {rewards.map((reward) => (
@@ -956,7 +964,22 @@ export default function ManagerDashboard({ user, role, activeTab }) {
                 </div>
               </div>
             )}
-            <RewardImageUpload onUploaded={(url) => handleChangeRewardImage(reward.id, url)} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <RewardImageUpload onUploaded={(url) => handleChangeRewardImage(reward.id, url)} />
+              <span className="muted">or</span>
+              <input
+                placeholder="Paste an image URL..."
+                value={rewardImageUrlDrafts[reward.id] ?? ''}
+                onChange={(e) => setRewardImageUrlDrafts((prev) => ({ ...prev, [reward.id]: e.target.value }))}
+                style={{ flex: '1 1 200px' }}
+              />
+              <button
+                className="btn btn-outline"
+                onClick={() => handleChangeRewardImage(reward.id, rewardImageUrlDrafts[reward.id] || '')}
+              >
+                Use URL
+              </button>
+            </div>
           </div>
         ))}
       </div>
