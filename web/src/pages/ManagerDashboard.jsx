@@ -279,6 +279,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
   const [roster, setRoster] = useState([]);
   const [rosterPageSize, setRosterPageSize] = useState(5);
   const [rosterPage, setRosterPage] = useState(0);
+  const [rosterSearch, setRosterSearch] = useState('');
   const [managers, setManagers] = useState([]);
   const [activityEntries, setActivityEntries] = useState(null);
   const [message, setMessage] = useState('');
@@ -674,9 +675,20 @@ export default function ManagerDashboard({ user, role, activeTab }) {
   const showAdminPanel = activeTab === 'admin';
   const hasAnyAdminAccess = role === 'admin' || canManagePermissions || canViewActivityLog || canCreateUsers;
 
-  const rosterTotalPages = Math.max(1, Math.ceil(roster.length / rosterPageSize));
+  const rosterSearchLower = rosterSearch.trim().toLowerCase();
+  const filteredRoster = rosterSearchLower
+    ? roster.filter((entry) => {
+        const email = associatesById[entry.linkedUserId]?.email || '';
+        return (
+          entry.cortexFullName?.toLowerCase().includes(rosterSearchLower) ||
+          email.toLowerCase().includes(rosterSearchLower) ||
+          entry.aliases?.some((alias) => alias.toLowerCase().includes(rosterSearchLower))
+        );
+      })
+    : roster;
+  const rosterTotalPages = Math.max(1, Math.ceil(filteredRoster.length / rosterPageSize));
   const rosterPageClamped = Math.min(rosterPage, rosterTotalPages - 1);
-  const pagedRoster = roster.slice(rosterPageClamped * rosterPageSize, (rosterPageClamped + 1) * rosterPageSize);
+  const pagedRoster = filteredRoster.slice(rosterPageClamped * rosterPageSize, (rosterPageClamped + 1) * rosterPageSize);
 
   return (
     <div>
@@ -931,6 +943,22 @@ export default function ManagerDashboard({ user, role, activeTab }) {
         </form>
         {roster.length === 0 && <p className="muted">No roster entries yet.</p>}
         {roster.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <input
+              placeholder="Search by name or email..."
+              value={rosterSearch}
+              onChange={(e) => {
+                setRosterSearch(e.target.value);
+                setRosterPage(0);
+              }}
+              style={{ width: '100%' }}
+            />
+          </div>
+        )}
+        {roster.length > 0 && filteredRoster.length === 0 && (
+          <p className="muted">No roster entries match "{rosterSearch}".</p>
+        )}
+        {filteredRoster.length > 0 && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <label className="muted" htmlFor="roster-page-size">View</label>
@@ -945,7 +973,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
                 <option value={5}>5</option>
                 <option value={10}>10</option>
                 <option value={25}>25</option>
-                <option value={roster.length}>All ({roster.length})</option>
+                <option value={filteredRoster.length}>All ({filteredRoster.length})</option>
               </select>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
