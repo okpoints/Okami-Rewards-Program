@@ -120,6 +120,13 @@ async function redeemInviteLinkLogic(auth, data) {
       .sort((a, b) => (b.week || '').localeCompare(a.week || ''))[0];
   }
 
+  // A generic (non-roster-tied) invite for an associate still gets a fresh
+  // roster entry auto-linked at signup, same as manually adding them to
+  // the roster first would - so they show up in the Roster card for
+  // supervision instead of only being reachable via account search.
+  const newRosterRef =
+    !rosterId && preSnap.exists && preSnap.data().role === 'associate' ? db.collection('roster').doc() : null;
+
   const inviteRole = await db.runTransaction(async (tx) => {
     const inviteSnap = await tx.get(inviteRef);
     if (!inviteSnap.exists) throw new HttpsError('not-found', 'This invite link is not valid.');
@@ -144,6 +151,20 @@ async function redeemInviteLinkLogic(auth, data) {
       userUpdates.rosterId = invite.rosterId;
       userUpdates.totalPoints = admin.firestore.FieldValue.increment(totalHistoricalPoints);
       if (latestLedgerEntry) userUpdates.currentStanding = latestLedgerEntry.standing;
+    } else if (newRosterRef && invite.role === 'associate') {
+      userUpdates.rosterId = newRosterRef.id;
+      tx.set(newRosterRef, {
+        transporterId: null,
+        cortexFullName: auth.token.name || 'Unknown',
+        aliases: [],
+        source: 'manual',
+        linkedUserId: auth.uid,
+        linkedAt: admin.firestore.Timestamp.now(),
+        active: true,
+        lastSeenWeek: null,
+        createdAt: admin.firestore.Timestamp.now(),
+        updatedAt: admin.firestore.Timestamp.now(),
+      });
     }
     tx.update(userRef, userUpdates);
 

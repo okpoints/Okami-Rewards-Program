@@ -50,6 +50,28 @@ async function createUserAccountLogic(auth, data, requireRole) {
 
   await admin.auth().setCustomUserClaims(userRecord.uid, { role: targetRole });
 
+  // An associate account created this way (no Cortex history yet) still
+  // gets a roster entry, auto-linked immediately - same as if a manager
+  // had added them to the roster by hand first, just skipping that step -
+  // so they show up in the Roster card for supervision like everyone else.
+  let rosterId = null;
+  if (targetRole === 'associate') {
+    const rosterRef = db.collection('roster').doc();
+    await rosterRef.set({
+      transporterId: null,
+      cortexFullName: fullName.trim(),
+      aliases: [],
+      source: 'manual',
+      linkedUserId: userRecord.uid,
+      linkedAt: admin.firestore.Timestamp.now(),
+      active: true,
+      lastSeenWeek: null,
+      createdAt: admin.firestore.Timestamp.now(),
+      updatedAt: admin.firestore.Timestamp.now(),
+    });
+    rosterId = rosterRef.id;
+  }
+
   await db.collection('users').doc(userRecord.uid).set({
     email,
     fullName,
@@ -58,6 +80,7 @@ async function createUserAccountLogic(auth, data, requireRole) {
     status: 'active',
     createdAt: admin.firestore.Timestamp.now(),
     createdBy: auth.uid,
+    ...(rosterId ? { rosterId } : {}),
   });
 
   await logActivity({
