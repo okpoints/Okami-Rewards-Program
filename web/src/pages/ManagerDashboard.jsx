@@ -324,7 +324,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
       setPendingRequests(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
     const unsubRewards = onSnapshot(collection(db, 'rewards'), (snap) => {
-      setRewards(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      setRewards(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.pointCost - b.pointCost));
     });
     const unsubReviews = onSnapshot(query(collection(db, 'pendingReview'), where('status', '==', 'open')), (snap) => {
       setPendingReviews(snap.docs.map((d) => ({ id: d.id, ...d.data() })));

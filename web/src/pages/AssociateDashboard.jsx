@@ -137,7 +137,7 @@ export default function AssociateDashboard({ user }) {
 
     const rewardsQuery = query(collection(db, 'rewards'), where('active', '==', true));
     const unsubRewards = onSnapshot(rewardsQuery, (snap) => {
-      setRewards(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      setRewards(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.pointCost - b.pointCost));
     });
 
     const requestsQuery = query(
