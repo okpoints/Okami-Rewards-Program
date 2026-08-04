@@ -73,6 +73,11 @@ service cloud.firestore {
       }
     }
 
+    match /rosterMergeSuggestions/{suggestionId} {
+      allow read: if isManagerOrAdmin();
+      allow write: if false; // Cloud Functions only
+    }
+
     match /cortexImports/{importId} {
       allow read: if isManagerOrAdmin();
       allow write: if false;

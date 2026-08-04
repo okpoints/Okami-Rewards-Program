@@ -26,6 +26,7 @@ const deletePointAdjustment = httpsCallable(functions, 'deletePointAdjustment');
 const addRosterAlias = httpsCallable(functions, 'addRosterAlias');
 const createRosterEntry = httpsCallable(functions, 'createRosterEntry');
 const setRosterActive = httpsCallable(functions, 'setRosterActive');
+const resolveRosterMerge = httpsCallable(functions, 'resolveRosterMerge');
 const setManagerPermission = httpsCallable(functions, 'setManagerPermission');
 const setUserRole = httpsCallable(functions, 'setUserRole');
 const createUserAccount = httpsCallable(functions, 'createUserAccount');
@@ -270,6 +271,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [rewards, setRewards] = useState([]);
   const [pendingReviews, setPendingReviews] = useState([]);
+  const [rosterMergeSuggestions, setRosterMergeSuggestions] = useState([]);
   const [unclaimedRoster, setUnclaimedRoster] = useState([]);
   const [reviewRosterPicks, setReviewRosterPicks] = useState({});
   const [bonusTasks, setBonusTasks] = useState([]);
@@ -346,6 +348,12 @@ export default function ManagerDashboard({ user, role, activeTab }) {
     const unsubInvites = onSnapshot(collection(db, 'inviteLinks'), (snap) => {
       setInviteLinks(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
+    const unsubRosterMerges = onSnapshot(
+      query(collection(db, 'rosterMergeSuggestions'), where('status', '==', 'pending')),
+      (snap) => {
+        setRosterMergeSuggestions(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      }
+    );
 
     return () => {
       unsubPending();
@@ -359,6 +367,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
       unsubManagers();
       unsubAdmins();
       unsubInvites();
+      unsubRosterMerges();
     };
   }, []);
 
@@ -404,6 +413,15 @@ export default function ManagerDashboard({ user, role, activeTab }) {
     }
     try {
       await resolveIdentityLink({ reviewId, rosterId });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleResolveRosterMerge(suggestionId, decision) {
+    setMessage('');
+    try {
+      await resolveRosterMerge({ suggestionId, decision });
     } catch (err) {
       setMessage(err.message);
     }
@@ -774,6 +792,33 @@ export default function ManagerDashboard({ user, role, activeTab }) {
           </div>
         ))}
       </div>
+
+      {rosterMergeSuggestions.length > 0 && (
+        <div className="card">
+          <h2>Possible roster duplicates ({rosterMergeSuggestions.length})</h2>
+          <p className="muted">
+            Cortex just reported someone under a real Transporter ID whose name matches an already-linked, manually-added
+            roster entry. Confirm if it's the same person (merges the two and credits their points) or dismiss if it's a
+            coincidence.
+          </p>
+          {rosterMergeSuggestions.map((s) => (
+            <div className="list-row" key={s.id} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+              <span>
+                <strong>{s.fullName}</strong>{' '}
+                <span className="muted">- newly synced from Cortex ({s.week}), matches an existing manual entry</span>
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-primary" onClick={() => handleResolveRosterMerge(s.id, 'merge')}>
+                  Confirm - same person
+                </button>
+                <button className="btn btn-outline" onClick={() => handleResolveRosterMerge(s.id, 'dismiss')}>
+                  Not a match
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="card">
         <h2>Pending redemption requests</h2>

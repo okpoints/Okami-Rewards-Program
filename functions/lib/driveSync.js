@@ -105,8 +105,29 @@ async function syncCortexFile() {
     console.log(`Cortex CSV "${file.name}" header keys:`, JSON.stringify(Object.keys(rows[0])));
   }
 
+  // Snapshotted once up front so a brand-new Transporter ID can be checked
+  // against already-linked manual roster entries (people onboarded via
+  // "Create user account" or a generic invite before Cortex ever saw them)
+  // - if their name matches, this is very likely the same person finally
+  // showing up in a real Cortex export under their actual Transporter ID,
+  // not a new hire. Rather than silently creating a second, disconnected
+  // roster entry (which would strand their future points on an account
+  // nobody's linked to), flag it for a manager to confirm or dismiss.
+  const existingRosterSnap = await db.collection('roster').get();
+  const existingRosterIds = new Set(existingRosterSnap.docs.map((d) => d.id));
+  const manualLinkedByLowerName = new Map();
+  for (const doc of existingRosterSnap.docs) {
+    const data = doc.data();
+    if (data.source !== 'manual' || !data.linkedUserId) continue;
+    const key = (data.cortexFullName || '').trim().toLowerCase();
+    if (!key) continue;
+    if (!manualLinkedByLowerName.has(key)) manualLinkedByLowerName.set(key, []);
+    manualLinkedByLowerName.get(key).push({ id: doc.id, ...data });
+  }
+
   const batch = db.batch();
   let rosterUpdates = 0;
+  let mergeSuggestions = 0;
 
   for (const row of rows) {
     const transporterId = (row['Transporter ID'] || '').trim();
@@ -114,6 +135,21 @@ async function syncCortexFile() {
     const standing = row['Overall Standing'];
     const score = parseFloat(row['Overall Score']);
     if (!transporterId || !rawName || Number.isNaN(score)) continue;
+
+    if (!existingRosterIds.has(transporterId)) {
+      const candidates = (manualLinkedByLowerName.get(rawName.toLowerCase()) || []).filter((c) => c.id !== transporterId);
+      if (candidates.length === 1) {
+        batch.set(db.collection('rosterMergeSuggestions').doc(), {
+          manualRosterId: candidates[0].id,
+          cortexRosterId: transporterId,
+          fullName: rawName,
+          week,
+          status: 'pending',
+          createdAt: admin.firestore.Timestamp.now(),
+        });
+        mergeSuggestions += 1;
+      }
+    }
 
     const { best, worst } = bestAndWorstMetric(row);
     const rosterRef = db.collection('roster').doc(transporterId);
@@ -160,6 +196,7 @@ async function syncCortexFile() {
     fileName: file.name,
     importedAt: admin.firestore.Timestamp.now(),
     rosterUpdates,
+    mergeSuggestions,
   });
   await batch.commit();
 
@@ -187,10 +224,10 @@ async function syncCortexFile() {
     action: 'cortex_import',
     targetType: 'cortexImports',
     targetId: week,
-    details: { fileName: file.name, rosterUpdates, linkedUpdates },
+    details: { fileName: file.name, rosterUpdates, linkedUpdates, mergeSuggestions },
   });
 
-  return { week, rosterUpdates, linkedUpdates };
+  return { week, rosterUpdates, linkedUpdates, mergeSuggestions };
 }
 
 module.exports = { syncCortexFile };

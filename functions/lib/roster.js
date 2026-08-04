@@ -146,10 +146,11 @@ async function addRosterAliasLogic(auth, data, requireRole) {
 
 // Manager/admin manually adds someone to the roster before Cortex has ever
 // reported them (e.g. a brand-new hire's first week isn't imported yet).
-// Note: if Cortex later reports this same person under a real Transporter
-// ID, that becomes a second, separate roster doc - reconciling the two is
-// a manual step for now (merge support can be added later if this comes
-// up often in practice).
+// If Cortex later reports this same person under a real Transporter ID,
+// syncCortexFile (see driveSync.js) flags a rosterMergeSuggestions entry by
+// name match instead of silently creating a disconnected second roster doc
+// - see resolveRosterMergeLogic below for how a manager confirms or
+// dismisses that.
 async function createRosterEntryLogic(auth, data, requireRole) {
   const role = requireRole(auth, ['manager', 'admin']);
   const { fullName, aliases } = data || {};
@@ -211,6 +212,85 @@ async function setRosterActiveLogic(auth, data, requireRole) {
   return { success: true };
 }
 
+// Manager/admin confirms or dismisses a merge suggestion raised during
+// Cortex sync (see driveSync.js) - "merge" retires the manually-created
+// entry and moves its linked account onto the real Cortex-keyed one,
+// crediting every week of points that were sitting there unclaimed;
+// "dismiss" just means it's a coincidence, both entries stay as they are.
+async function resolveRosterMergeLogic(auth, data, requireRole) {
+  const role = requireRole(auth, ['manager', 'admin']);
+  const { suggestionId, decision } = data || {};
+  if (!suggestionId || !['merge', 'dismiss'].includes(decision)) {
+    throw new HttpsError('invalid-argument', 'suggestionId and a decision of "merge" or "dismiss" are required.');
+  }
+
+  const suggestionRef = db.collection('rosterMergeSuggestions').doc(suggestionId);
+
+  if (decision === 'dismiss') {
+    const snap = await suggestionRef.get();
+    if (!snap.exists) throw new HttpsError('not-found', 'Merge suggestion not found.');
+    if (snap.data().status !== 'pending') throw new HttpsError('failed-precondition', 'This suggestion was already resolved.');
+
+    await suggestionRef.update({ status: 'dismissed', resolvedBy: auth.uid, resolvedAt: admin.firestore.Timestamp.now() });
+    await logActivity({
+      actorId: auth.uid, actorName: auth.token.name || 'Unknown', actorPosition: role,
+      action: 'dismiss_roster_merge', targetType: 'rosterMergeSuggestions', targetId: suggestionId,
+    });
+    return { success: true };
+  }
+
+  const suggestionSnap = await suggestionRef.get();
+  if (!suggestionSnap.exists) throw new HttpsError('not-found', 'Merge suggestion not found.');
+  const suggestion = suggestionSnap.data();
+  if (suggestion.status !== 'pending') throw new HttpsError('failed-precondition', 'This suggestion was already resolved.');
+
+  const manualRef = db.collection('roster').doc(suggestion.manualRosterId);
+  const cortexRef = db.collection('roster').doc(suggestion.cortexRosterId);
+
+  const manualSnap = await manualRef.get();
+  if (!manualSnap.exists || !manualSnap.data().linkedUserId) {
+    throw new HttpsError('failed-precondition', 'That manually-added roster entry is no longer linked to an account.');
+  }
+  const linkedUserId = manualSnap.data().linkedUserId;
+
+  // Every week of points Cortex has recorded under the real Transporter ID
+  // so far - none of it has reached the account yet, since nothing was
+  // linked to this roster doc until now.
+  const ledgerSnap = await cortexRef.collection('ledger').get();
+  const totalHistoricalPoints = ledgerSnap.docs.reduce((sum, d) => sum + (d.data().points || 0), 0);
+  const latestLedgerEntry = ledgerSnap.docs
+    .map((d) => d.data())
+    .sort((a, b) => (b.week || '').localeCompare(a.week || ''))[0];
+
+  await db.runTransaction(async (tx) => {
+    const [suggestionTxSnap, cortexSnap] = await Promise.all([tx.get(suggestionRef), tx.get(cortexRef)]);
+    if (suggestionTxSnap.data().status !== 'pending') {
+      throw new HttpsError('failed-precondition', 'This suggestion was already resolved by someone else.');
+    }
+    if (!cortexSnap.exists) throw new HttpsError('not-found', 'Cortex roster entry not found.');
+    if (cortexSnap.data().linkedUserId) {
+      throw new HttpsError('failed-precondition', 'That Cortex roster entry is already linked to an account.');
+    }
+
+    tx.update(cortexRef, { linkedUserId, linkedAt: admin.firestore.Timestamp.now() });
+    tx.update(manualRef, { active: false, mergedInto: suggestion.cortexRosterId, mergedAt: admin.firestore.Timestamp.now() });
+    tx.update(db.collection('users').doc(linkedUserId), {
+      rosterId: suggestion.cortexRosterId,
+      totalPoints: admin.firestore.FieldValue.increment(totalHistoricalPoints),
+      ...(latestLedgerEntry ? { currentStanding: latestLedgerEntry.standing } : {}),
+    });
+    tx.update(suggestionRef, { status: 'merged', resolvedBy: auth.uid, resolvedAt: admin.firestore.Timestamp.now() });
+  });
+
+  await logActivity({
+    actorId: auth.uid, actorName: auth.token.name || 'Unknown', actorPosition: role,
+    action: 'merge_roster_entries', targetType: 'rosterMergeSuggestions', targetId: suggestionId,
+    details: { manualRosterId: suggestion.manualRosterId, cortexRosterId: suggestion.cortexRosterId, creditedPoints: totalHistoricalPoints },
+  });
+
+  return { success: true, creditedPoints: totalHistoricalPoints };
+}
+
 module.exports = {
   findRosterCandidatesLogic,
   requestIdentityLinkLogic,
@@ -218,4 +298,5 @@ module.exports = {
   addRosterAliasLogic,
   createRosterEntryLogic,
   setRosterActiveLogic,
+  resolveRosterMergeLogic,
 };
