@@ -27,6 +27,7 @@ const addRosterAlias = httpsCallable(functions, 'addRosterAlias');
 const createRosterEntry = httpsCallable(functions, 'createRosterEntry');
 const setRosterActive = httpsCallable(functions, 'setRosterActive');
 const resolveRosterMerge = httpsCallable(functions, 'resolveRosterMerge');
+const mergeRosterEntries = httpsCallable(functions, 'mergeRosterEntries');
 const setManagerPermission = httpsCallable(functions, 'setManagerPermission');
 const setUserRole = httpsCallable(functions, 'setUserRole');
 const createUserAccount = httpsCallable(functions, 'createUserAccount');
@@ -272,6 +273,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
   const [rewards, setRewards] = useState([]);
   const [pendingReviews, setPendingReviews] = useState([]);
   const [rosterMergeSuggestions, setRosterMergeSuggestions] = useState([]);
+  const [rosterMergeDrafts, setRosterMergeDrafts] = useState({});
   const [unclaimedRoster, setUnclaimedRoster] = useState([]);
   const [reviewRosterPicks, setReviewRosterPicks] = useState({});
   const [bonusTasks, setBonusTasks] = useState([]);
@@ -423,6 +425,21 @@ export default function ManagerDashboard({ user, role, activeTab }) {
     setMessage('');
     try {
       await resolveRosterMerge({ suggestionId, decision });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function handleMergeRosterEntries(intoRosterId) {
+    setMessage('');
+    const fromRosterId = rosterMergeDrafts[intoRosterId];
+    if (!fromRosterId) {
+      setMessage('Pick which existing entry to merge from first.');
+      return;
+    }
+    try {
+      await mergeRosterEntries({ fromRosterId, intoRosterId });
+      setRosterMergeDrafts((prev) => ({ ...prev, [intoRosterId]: '' }));
     } catch (err) {
       setMessage(err.message);
     }
@@ -720,6 +737,13 @@ export default function ManagerDashboard({ user, role, activeTab }) {
   const rosterTotalPages = Math.max(1, Math.ceil(filteredRoster.length / rosterPageSize));
   const rosterPageClamped = Math.min(rosterPage, rosterTotalPages - 1);
   const pagedRoster = filteredRoster.slice(rosterPageClamped * rosterPageSize, (rosterPageClamped + 1) * rosterPageSize);
+
+  const linkedRosterOptions = roster
+    .filter((r) => r.linkedUserId)
+    .map((r) => {
+      const email = associatesById[r.linkedUserId]?.email;
+      return { value: r.id, label: email ? `${r.cortexFullName} (${email})` : r.cortexFullName };
+    });
 
   return (
     <div>
@@ -1122,6 +1146,21 @@ export default function ManagerDashboard({ user, role, activeTab }) {
                 />
                 <button className="btn btn-outline" onClick={() => handleSendRosterInvite(entry.id)}>
                   {latestRosterInviteById[entry.id]?.status === 'active' ? 'Generate new invite link' : 'Generate invite link'}
+                </button>
+              </div>
+            )}
+            {!entry.linkedUserId && linkedRosterOptions.length > 0 && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <div style={{ flex: '1 1 240px' }}>
+                  <SearchableSelect
+                    placeholder="Same person as an existing employee? Search to merge..."
+                    value={rosterMergeDrafts[entry.id] || ''}
+                    onChange={(value) => setRosterMergeDrafts((prev) => ({ ...prev, [entry.id]: value }))}
+                    options={linkedRosterOptions}
+                  />
+                </div>
+                <button className="btn btn-outline" onClick={() => handleMergeRosterEntries(entry.id)}>
+                  Merge
                 </button>
               </div>
             )}

@@ -11,6 +11,7 @@ const {
   createRosterEntryLogic,
   setRosterActiveLogic,
   resolveRosterMergeLogic,
+  mergeRosterEntriesLogic,
 } = require('./lib/roster');
 const { seedInitialRewardsLogic } = require('./lib/rewardsSeed');
 const { scanForInactiveDrivers } = require('./lib/inactivityScan');
@@ -85,6 +86,7 @@ exports.createRosterEntry = onCall((request) => createRosterEntryLogic(request.a
 
 exports.setRosterActive = onCall((request) => setRosterActiveLogic(request.auth, request.data, requireRole));
 exports.resolveRosterMerge = onCall((request) => resolveRosterMergeLogic(request.auth, request.data, requireRole));
+exports.mergeRosterEntries = onCall((request) => mergeRosterEntriesLogic(request.auth, request.data, requireRole));
 
 // Called by the client right after sign-in so "last login" shows on the
 // manager-facing roster view.
