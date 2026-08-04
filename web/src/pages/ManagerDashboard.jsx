@@ -673,7 +673,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
   const isStale = daysSinceSuccess === null || daysSinceSuccess > SYNC_STALE_DAYS;
   const showSyncWarning = isCurrentlyFailing || isStale;
   const showAdminPanel = activeTab === 'admin';
-  const hasAnyAdminAccess = role === 'admin' || canManagePermissions || canViewActivityLog || canCreateUsers;
+  const hasAnyAdminAccess = role === 'admin' || canManagePermissions || canViewActivityLog;
 
   const rosterSearchLower = rosterSearch.trim().toLowerCase();
   const filteredRoster = rosterSearchLower
@@ -1047,17 +1047,8 @@ export default function ManagerDashboard({ user, role, activeTab }) {
           </div>
         ))}
       </div>
-      </>
-      )}
 
-      {showAdminPanel && !hasAnyAdminAccess && (
-        <div className="card">
-          <h2>Admin panel</h2>
-          <p className="muted">You haven't been granted any admin permissions yet - ask an admin to delegate activity log access, account creation, or manager-permission management to you.</p>
-        </div>
-      )}
-
-      {showAdminPanel && canCreateUsers && (
+      {canCreateUsers && (
         <div className="card">
           <h2>Create user account</h2>
           <p className="muted">
@@ -1097,7 +1088,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
         </div>
       )}
 
-      {showAdminPanel && canCreateUsers && (
+      {canCreateUsers && (
         <div className="card">
           <h2>Invite links</h2>
           <p className="muted">
@@ -1160,6 +1151,15 @@ export default function ManagerDashboard({ user, role, activeTab }) {
                 ))}
             </div>
           )}
+        </div>
+      )}
+      </>
+      )}
+
+      {showAdminPanel && !hasAnyAdminAccess && (
+        <div className="card">
+          <h2>Admin panel</h2>
+          <p className="muted">You haven't been granted any admin permissions yet - ask an admin to delegate activity log access, account creation, or manager-permission management to you.</p>
         </div>
       )}
 
