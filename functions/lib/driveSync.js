@@ -88,7 +88,16 @@ async function syncCortexFile() {
   }
 
   const csvText = await downloadCsv(drive, file.id);
-  const rows = parse(csvText, { columns: true, skip_empty_lines: true, bom: true, trim: true });
+  // Cortex's export sometimes leaves stray whitespace on a header name (e.g.
+  // "Delivery Associate " with a trailing space) - trim column names
+  // explicitly since `trim: true` below only trims field values, not the
+  // header row used to build each row's keys.
+  const rows = parse(csvText, {
+    columns: (header) => header.map((h) => h.trim()),
+    skip_empty_lines: true,
+    bom: true,
+    trim: true,
+  });
   if (rows.length > 0) {
     // Logged so a header mismatch (extra whitespace, a renamed column, etc.)
     // is visible in Cloud Functions logs instead of just silently matching
