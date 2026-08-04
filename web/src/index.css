@@ -203,8 +203,8 @@ input {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px;
 }
 
 .reward-card {
@@ -215,11 +215,11 @@ input {
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .reward-card .reward-image {
-  height: 120px;
+  height: 200px;
   border-radius: var(--radius);
   background: var(--color-surface-alt);
   display: flex;
@@ -231,6 +231,7 @@ input {
 
 .reward-card .reward-name {
   font-weight: 600;
+  font-size: 16px;
 }
 
 .reward-card .reward-cost {
@@ -243,7 +244,7 @@ input {
 }
 
 .reward-icon {
-  font-size: 48px;
+  font-size: 72px;
   line-height: 1;
 }
 
