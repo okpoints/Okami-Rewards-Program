@@ -977,6 +977,23 @@ export default function ManagerDashboard({ user, role, activeTab }) {
                       onChange={(e) => setRewardDraft({ ...rewardDraft, pointCost: e.target.value })}
                     />
                   </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <RewardImageUpload onUploaded={(url) => handleChangeRewardImage(reward.id, url)} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                      placeholder="Paste an image URL..."
+                      value={rewardImageUrlDrafts[reward.id] ?? ''}
+                      onChange={(e) => setRewardImageUrlDrafts((prev) => ({ ...prev, [reward.id]: e.target.value }))}
+                      style={{ flex: 1 }}
+                    />
+                    <button
+                      className="btn btn-outline"
+                      onClick={() => handleChangeRewardImage(reward.id, rewardImageUrlDrafts[reward.id] || '')}
+                    >
+                      Use URL
+                    </button>
+                  </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button className="btn btn-primary" onClick={() => handleSaveRewardEdit(reward.id)}>Save</button>
                     <button className="btn btn-outline" onClick={() => setEditingRewardId(null)}>Cancel</button>
@@ -995,23 +1012,6 @@ export default function ManagerDashboard({ user, role, activeTab }) {
                   </div>
                 </>
               )}
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                <RewardImageUpload onUploaded={(url) => handleChangeRewardImage(reward.id, url)} />
-              </div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input
-                  placeholder="Paste an image URL..."
-                  value={rewardImageUrlDrafts[reward.id] ?? ''}
-                  onChange={(e) => setRewardImageUrlDrafts((prev) => ({ ...prev, [reward.id]: e.target.value }))}
-                  style={{ flex: 1 }}
-                />
-                <button
-                  className="btn btn-outline"
-                  onClick={() => handleChangeRewardImage(reward.id, rewardImageUrlDrafts[reward.id] || '')}
-                >
-                  Use URL
-                </button>
-              </div>
             </div>
           ))}
         </div>
