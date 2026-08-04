@@ -4,6 +4,7 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../firebase';
 import { IdentityCheckStep } from './AuthPage';
 import { rewardIcon } from '../rewardIcon';
+import { formatPoints } from '../formatPoints';
 
 const requestRedemption = httpsCallable(functions, 'requestRedemption');
 const enrollInBonusTask = httpsCallable(functions, 'enrollInBonusTask');
@@ -48,7 +49,7 @@ function BonusTaskEntry({ task, userId }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <strong>{task.title}</strong>{' '}
-          <span className="muted">({task.openings} openings, {task.pointValue} pts, {task.urgency})</span>
+          <span className="muted">({task.openings} openings, {formatPoints(task.pointValue)} pts, {task.urgency})</span>
         </div>
         {enrollment ? (
           <span className="badge badge-pending">{ENROLLMENT_STATUS_LABELS[enrollment.status] || enrollment.status}</span>
@@ -91,7 +92,7 @@ function AnnouncementEntry({ announcement, userId }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <strong>{announcement.title}</strong>{' '}
-          <span className="muted">({announcement.pointValue} pts, {announcement.urgency})</span>
+          <span className="muted">({formatPoints(announcement.pointValue)} pts, {announcement.urgency})</span>
         </div>
         {enrollment ? (
           <span className="badge badge-pending">{ENROLLMENT_STATUS_LABELS[enrollment.status] || enrollment.status}</span>
@@ -233,15 +234,15 @@ export default function AssociateDashboard({ user }) {
         <div className="points-hero">
           <div className="points-hero-stat total">
             <div className="stat-label">Total Available</div>
-            <div className="stat-value">{totalPoints}</div>
+            <div className="stat-value">{formatPoints(totalPoints)}</div>
           </div>
           <div className="points-hero-stat">
             <div className="stat-label">Lifetime Earned</div>
-            <div className="stat-value">{lifetimeEarned}</div>
+            <div className="stat-value">{formatPoints(lifetimeEarned)}</div>
           </div>
           <div className="points-hero-stat">
             <div className="stat-label">Lifetime Redeemed</div>
-            <div className="stat-value">{lifetimeRedeemed}</div>
+            <div className="stat-value">{formatPoints(lifetimeRedeemed)}</div>
           </div>
         </div>
 
@@ -251,7 +252,7 @@ export default function AssociateDashboard({ user }) {
               <div className="progress-fill" style={{ width: `${progressPct}%` }} />
             </div>
             <p className="progress-callout">
-              You're only {nextReward.pointCost - totalPoints} points away from redeeming {nextReward.name}!
+              You're only {formatPoints(nextReward.pointCost - totalPoints)} points away from redeeming {nextReward.name}!
             </p>
           </div>
         )}
@@ -293,7 +294,7 @@ export default function AssociateDashboard({ user }) {
                   )}
                 </div>
                 <div className="reward-name">{reward.name}</div>
-                <div className="reward-cost">{reward.pointCost} pts</div>
+                <div className="reward-cost">{formatPoints(reward.pointCost)} pts</div>
                 {locked ? (
                   <button className="btn btn-outline" disabled>
                     🔒 Unlock at Gold Level
@@ -334,7 +335,7 @@ export default function AssociateDashboard({ user }) {
         {myRequests.length === 0 && <p className="muted">No requests yet.</p>}
         {myRequests.map((req) => (
           <div className="list-row" key={req.id}>
-            <span>{req.rewardName} - {req.pointCost} pts</span>
+            <span>{req.rewardName} - {formatPoints(req.pointCost)} pts</span>
             <StatusBadge status={req.status} />
           </div>
         ))}
@@ -348,7 +349,7 @@ export default function AssociateDashboard({ user }) {
             <span className="transaction-date">{formatDate(t.date)}</span>
             <span className="transaction-desc">{t.description}</span>
             <span className={`transaction-points ${t.points >= 0 ? 'positive' : 'negative'}`}>
-              {t.points >= 0 ? '+' : ''}{t.points} pts
+              {t.points >= 0 ? '+' : ''}{formatPoints(t.points)} pts
             </span>
           </div>
         ))}

@@ -3,6 +3,7 @@ import { collection, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { db, auth } from '../firebase';
 import PushDeviceToggle from '../components/PushDeviceToggle';
+import { formatPoints } from '../formatPoints';
 
 function toDate(value) {
   return value?.toDate ? value.toDate() : new Date(value);
@@ -174,7 +175,7 @@ export default function ProfilePage({ user }) {
           </div>
           <div className="points-hero-stat">
             <div className="stat-label">Points Balance</div>
-            <div className="stat-value">{profile.totalPoints ?? 0}</div>
+            <div className="stat-value">{formatPoints(profile.totalPoints)}</div>
           </div>
           {latestLedgerEntry?.bestMetric && (
             <div className="points-hero-stat">

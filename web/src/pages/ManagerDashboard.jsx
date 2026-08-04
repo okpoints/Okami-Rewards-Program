@@ -9,6 +9,7 @@ import { db, functions, auth } from '../firebase';
 import SearchableSelect from '../components/SearchableSelect';
 import RewardImageUpload from '../components/RewardImageUpload';
 import { rewardIcon } from '../rewardIcon';
+import { formatPoints } from '../formatPoints';
 
 const resolveRedemption = httpsCallable(functions, 'resolveRedemption');
 const seedInitialRewards = httpsCallable(functions, 'seedInitialRewards');
@@ -80,7 +81,7 @@ function BonusTaskCard({ task, associatesById }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <strong>{task.title}</strong>{' '}
-          <span className="muted">({task.urgency}, {task.openings} openings, {task.pointValue} pts)</span>
+          <span className="muted">({task.urgency}, {task.openings} openings, {formatPoints(task.pointValue)} pts)</span>
         </div>
         <button className="btn btn-outline" onClick={handleDelete}>Delete</button>
       </div>
@@ -147,7 +148,7 @@ function AnnouncementCard({ announcement, associatesById }) {
         <div>
           <strong>{announcement.title}</strong>{' '}
           <span className="muted">
-            ({announcement.urgency}, needs {announcement.driversNeeded}, {announcement.pointValue} pts)
+            ({announcement.urgency}, needs {announcement.driversNeeded}, {formatPoints(announcement.pointValue)} pts)
           </span>
         </div>
         <button className="btn btn-outline" onClick={handleDelete}>Delete</button>
@@ -240,7 +241,7 @@ function DriverPointHistory({ driver }) {
   return (
     <div className="card">
       <h2>{driver.fullName || driver.email}'s point history</h2>
-      <p className="muted" style={{ marginTop: -8, marginBottom: 12 }}>{driver.totalPoints ?? 0} pts total</p>
+      <p className="muted" style={{ marginTop: -8, marginBottom: 12 }}>{formatPoints(driver.totalPoints)} pts total</p>
       {entries.length === 0 && <p className="muted">No point activity yet.</p>}
       {entries.map((entry) => (
         <div className="list-row" key={entry.id}>
@@ -250,7 +251,7 @@ function DriverPointHistory({ driver }) {
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span className={entry.points >= 0 ? 'accent-text-green' : 'error-text'}>
-              {entry.points >= 0 ? '+' : ''}{entry.points} pts
+              {entry.points >= 0 ? '+' : ''}{formatPoints(entry.points)} pts
             </span>
             {entry.deletable && (
               <button
@@ -851,7 +852,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
         {pendingRequests.length === 0 && <p className="muted">Nothing pending.</p>}
         {pendingRequests.map((req) => (
           <div className="list-row" key={req.id}>
-            <span>{req.rewardName} - {req.pointCost} pts</span>
+            <span>{req.rewardName} - {formatPoints(req.pointCost)} pts</span>
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-primary" onClick={() => handleResolve(req.id, 'approved')}>Approve</button>
               <button className="btn btn-outline" onClick={() => handleResolve(req.id, 'rejected')}>Deny</button>
@@ -1002,7 +1003,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
               ) : (
                 <>
                   <div className="reward-name">{reward.name} {!reward.active && '(inactive)'}</div>
-                  <div className="reward-cost">{reward.pointCost} pts</div>
+                  <div className="reward-cost">{formatPoints(reward.pointCost)} pts</div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <button className="btn btn-outline" onClick={() => handleStartEditReward(reward)}>Edit</button>
                     <button className="btn btn-outline" onClick={() => handleToggleRewardActive(reward)}>
