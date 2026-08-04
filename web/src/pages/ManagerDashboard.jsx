@@ -277,6 +277,8 @@ export default function ManagerDashboard({ user, role, activeTab }) {
   const [associates, setAssociates] = useState([]);
   const [myProfile, setMyProfile] = useState(null);
   const [roster, setRoster] = useState([]);
+  const [rosterPageSize, setRosterPageSize] = useState(5);
+  const [rosterPage, setRosterPage] = useState(0);
   const [managers, setManagers] = useState([]);
   const [activityEntries, setActivityEntries] = useState(null);
   const [message, setMessage] = useState('');
@@ -672,6 +674,10 @@ export default function ManagerDashboard({ user, role, activeTab }) {
   const showAdminPanel = activeTab === 'admin';
   const hasAnyAdminAccess = role === 'admin' || canManagePermissions || canViewActivityLog || canCreateUsers;
 
+  const rosterTotalPages = Math.max(1, Math.ceil(roster.length / rosterPageSize));
+  const rosterPageClamped = Math.min(rosterPage, rosterTotalPages - 1);
+  const pagedRoster = roster.slice(rosterPageClamped * rosterPageSize, (rosterPageClamped + 1) * rosterPageSize);
+
   return (
     <div>
       {message && (
@@ -924,7 +930,44 @@ export default function ManagerDashboard({ user, role, activeTab }) {
           <button className="btn btn-outline" type="submit">Add to roster</button>
         </form>
         {roster.length === 0 && <p className="muted">No roster entries yet.</p>}
-        {roster.map((entry) => (
+        {roster.length > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <label className="muted" htmlFor="roster-page-size">View</label>
+              <select
+                id="roster-page-size"
+                value={rosterPageSize}
+                onChange={(e) => {
+                  setRosterPageSize(Number(e.target.value));
+                  setRosterPage(0);
+                }}
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={roster.length}>All ({roster.length})</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button
+                className="btn btn-outline"
+                disabled={rosterPageClamped === 0}
+                onClick={() => setRosterPage((p) => Math.max(0, p - 1))}
+              >
+                Previous
+              </button>
+              <span className="muted">Page {rosterPageClamped + 1} of {rosterTotalPages}</span>
+              <button
+                className="btn btn-outline"
+                disabled={rosterPageClamped >= rosterTotalPages - 1}
+                onClick={() => setRosterPage((p) => Math.min(rosterTotalPages - 1, p + 1))}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+        {pagedRoster.map((entry) => (
           <div className="list-row" key={entry.id} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>
