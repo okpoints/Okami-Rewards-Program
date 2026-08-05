@@ -1191,7 +1191,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
           <h2>Create user account</h2>
           <p className="muted">
             For onboarding someone before they've signed up themselves. They'll get an email to set their own
-            password - admin accounts can only be created by promoting an existing account from Privilege assignment.
+            password{role !== 'admin' ? ' - admin accounts can only be created by an admin, or by promoting an existing account from Privilege assignment' : ''}.
           </p>
           <form onSubmit={handleCreateUserAccount} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 12 }}>
             <div className="field" style={{ flex: '1 1 200px' }}>
@@ -1219,6 +1219,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
               >
                 <option value="associate">Employee</option>
                 <option value="manager">Manager</option>
+                {role === 'admin' && <option value="admin">Admin</option>}
               </select>
             </div>
             <button className="btn btn-primary" type="submit">Create account</button>

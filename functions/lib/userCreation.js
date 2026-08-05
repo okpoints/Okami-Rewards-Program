@@ -3,13 +3,14 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const { db, admin } = require('./admin');
 const { logActivity } = require('./activityLog');
 
-// Only associate/manager can be created this way, even by an admin -
-// creating an admin account is equivalent to a role promotion, and that
-// stays exclusively on the Privilege Assignment console (setUserRole),
-// which already has the self-change guard and activity logging that
-// power deserves. Create as associate/manager here, then promote from
-// there if an admin account is really what's needed.
-const CREATABLE_ROLES = ['associate', 'manager'];
+// Admin can create any of the three roles directly, including admin itself
+// - granting admin power is still gated to admins only (checked below), so
+// this doesn't open a new path around that. A manager (even one delegated
+// createUserAccounts) can only ever create associate/manager - creating an
+// admin account is equivalent to a role promotion, and a delegated manager
+// was never allowed to do that (see setUserRoleLogic, admin-only).
+const CREATABLE_ROLES = ['associate', 'manager', 'admin'];
+const MANAGER_CREATABLE_ROLES = ['associate', 'manager'];
 
 // Admin-initiated account creation for someone who hasn't signed up
 // themselves yet (e.g. onboarding a new hire before they've set anything
@@ -23,6 +24,9 @@ async function createUserAccountLogic(auth, data, requireRole) {
   }
 
   if (role === 'manager') {
+    if (!MANAGER_CREATABLE_ROLES.includes(targetRole)) {
+      throw new HttpsError('permission-denied', 'Only an admin can create an admin account.');
+    }
     const callerSnap = await db.collection('users').doc(auth.uid).get();
     if (!callerSnap.data()?.permissions?.createUserAccounts) {
       throw new HttpsError('permission-denied', 'You have not been granted permission to create user accounts.');
