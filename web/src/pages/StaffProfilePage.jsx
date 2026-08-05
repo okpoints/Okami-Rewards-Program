@@ -6,8 +6,7 @@ import PushDeviceToggle from '../components/PushDeviceToggle';
 
 const NOTIFICATION_TYPE_LABELS = {
   redemption: 'Redemption requests (needs approval)',
-  bonusTask: 'Bonus task sign-ups and completions',
-  announcement: 'Area of Highest Need sign-ups',
+  announcement: 'New team announcements posted',
   pendingReview: 'New signups needing identity confirmation',
   syncFailure: 'Cortex sync failures',
   inactivityReview: 'Inactive driver reviews',
@@ -15,7 +14,7 @@ const NOTIFICATION_TYPE_LABELS = {
 
 const BASE_PRIVILEGES = [
   'Approve or deny driver reward redemptions',
-  'Approve or deny bonus task and Area of Highest Need completions',
+  'Post announcements/comments for the whole team',
   'Directly adjust a driver\'s point balance (with a required reason)',
   'Manage the reward catalog',
   'Manage the driver roster and confirm signup identity matches',

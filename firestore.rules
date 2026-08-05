@@ -104,15 +104,9 @@ service cloud.firestore {
     }
 
     match /announcements/{announcementId} {
-      // Headcount needed, point value, etc. are visible to everyone -
-      // enrollment counts/lists are NOT here, see the enrollments subcollection.
+      // A plain manager-to-team comment board - no points, no sign-up.
       allow read: if isSignedIn();
       allow write: if false; // Cloud Functions only
-
-      match /enrollments/{userId} {
-        allow read: if isSignedIn() && (request.auth.uid == userId || isManagerOrAdmin());
-        allow write: if false; // Cloud Functions only
-      }
     }
 
     match /pointAdjustments/{adjustmentId} {

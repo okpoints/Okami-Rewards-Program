@@ -7,101 +7,14 @@ import { rewardIcon } from '../rewardIcon';
 import { formatPoints } from '../formatPoints';
 
 const requestRedemption = httpsCallable(functions, 'requestRedemption');
-const enrollInBonusTask = httpsCallable(functions, 'enrollInBonusTask');
-const enrollInAnnouncement = httpsCallable(functions, 'enrollInAnnouncement');
 
 const REDEMPTION_ELIGIBLE_STANDINGS = ['Gold', 'Platinum'];
 
-const ENROLLMENT_STATUS_LABELS = {
-  enrolled: 'Signed up - awaiting confirmation',
-  confirmed: 'Confirmed - go do it!',
-  completed: 'Completed - points awarded',
-  denied: 'Not approved',
-  not_selected: 'Not selected this time',
-};
-
-function BonusTaskEntry({ task, userId }) {
-  const [enrollment, setEnrollment] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'bonusTasks', task.id, 'enrollments', userId), (snap) => {
-      setEnrollment(snap.exists() ? snap.data() : null);
-    });
-    return unsub;
-  }, [task.id, userId]);
-
-  async function handleEnroll() {
-    setBusy(true);
-    setError('');
-    try {
-      await enrollInBonusTask({ taskId: task.id });
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
+function AnnouncementEntry({ announcement }) {
   return (
     <div className="list-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <strong>{task.title}</strong>{' '}
-          <span className="muted">({task.openings} openings, {formatPoints(task.pointValue)} pts, {task.urgency})</span>
-        </div>
-        {enrollment ? (
-          <span className="badge badge-pending">{ENROLLMENT_STATUS_LABELS[enrollment.status] || enrollment.status}</span>
-        ) : (
-          <button className="btn btn-primary" disabled={busy} onClick={handleEnroll}>I'll do this</button>
-        )}
-      </div>
-      {task.description && <p className="muted">{task.description}</p>}
-      {error && <p className="error-text">{error}</p>}
-    </div>
-  );
-}
-
-function AnnouncementEntry({ announcement, userId }) {
-  const [enrollment, setEnrollment] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'announcements', announcement.id, 'enrollments', userId), (snap) => {
-      setEnrollment(snap.exists() ? snap.data() : null);
-    });
-    return unsub;
-  }, [announcement.id, userId]);
-
-  async function handleEnroll() {
-    setBusy(true);
-    setError('');
-    try {
-      await enrollInAnnouncement({ announcementId: announcement.id });
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="list-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <strong>{announcement.title}</strong>{' '}
-          <span className="muted">({formatPoints(announcement.pointValue)} pts, {announcement.urgency})</span>
-        </div>
-        {enrollment ? (
-          <span className="badge badge-pending">{ENROLLMENT_STATUS_LABELS[enrollment.status] || enrollment.status}</span>
-        ) : (
-          <button className="btn btn-primary" disabled={busy} onClick={handleEnroll}>Sign me up</button>
-        )}
-      </div>
-      {announcement.description && <p className="muted">{announcement.description}</p>}
-      {error && <p className="error-text">{error}</p>}
+      <strong>{announcement.title}</strong>
+      <p className="muted" style={{ margin: 0 }}>{announcement.message}</p>
     </div>
   );
 }
@@ -125,7 +38,6 @@ export default function AssociateDashboard({ user }) {
   const [myRequests, setMyRequests] = useState([]);
   const [ledgerEntries, setLedgerEntries] = useState([]);
   const [adjustments, setAdjustments] = useState([]);
-  const [bonusTasks, setBonusTasks] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [message, setMessage] = useState('');
   const [showIdentityCheck, setShowIdentityCheck] = useState(false);
@@ -154,12 +66,12 @@ export default function AssociateDashboard({ user }) {
       setAdjustments(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
 
-    const unsubBonusTasks = onSnapshot(collection(db, 'bonusTasks'), (snap) => {
-      setBonusTasks(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((t) => t.active));
-    });
-
     const unsubAnnouncements = onSnapshot(collection(db, 'announcements'), (snap) => {
-      setAnnouncements(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((a) => a.active));
+      setAnnouncements(
+        snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+      );
     });
 
     return () => {
@@ -167,7 +79,6 @@ export default function AssociateDashboard({ user }) {
       unsubRewards();
       unsubRequests();
       unsubAdjustments();
-      unsubBonusTasks();
       unsubAnnouncements();
     };
   }, [user.uid]);
@@ -316,18 +227,9 @@ export default function AssociateDashboard({ user }) {
       </div>
 
       <div className="card">
-        <h2>Bonus tasks</h2>
-        <p className="muted" style={{ marginTop: -8, marginBottom: 12 }}>
-          Pick up extra shifts and tasks to earn more points - a manager approves before points are awarded.
-        </p>
-        {bonusTasks.length === 0 && <p className="muted">No bonus tasks available right now.</p>}
-        {bonusTasks.map((task) => <BonusTaskEntry task={task} userId={user.uid} key={task.id} />)}
-      </div>
-
-      <div className="card">
-        <h2>Area of highest need</h2>
-        {announcements.length === 0 && <p className="muted">Nothing urgent posted right now.</p>}
-        {announcements.map((a) => <AnnouncementEntry announcement={a} userId={user.uid} key={a.id} />)}
+        <h2>Announcements</h2>
+        {announcements.length === 0 && <p className="muted">Nothing posted right now.</p>}
+        {announcements.map((a) => <AnnouncementEntry announcement={a} key={a.id} />)}
       </div>
 
       <div className="card">

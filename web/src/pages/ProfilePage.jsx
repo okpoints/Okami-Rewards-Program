@@ -9,11 +9,6 @@ function toDate(value) {
   return value?.toDate ? value.toDate() : new Date(value);
 }
 
-function daysSince(value) {
-  if (!value) return Infinity;
-  return Math.floor((Date.now() - toDate(value).getTime()) / (1000 * 60 * 60 * 24));
-}
-
 export default function ProfilePage({ user }) {
   const [profile, setProfile] = useState(null);
   const [ledgerEntries, setLedgerEntries] = useState([]);
@@ -100,9 +95,6 @@ export default function ProfilePage({ user }) {
   ].filter(Boolean);
 
   const opportunities = [];
-  if (daysSince(profile.lastBonusTaskCompletedAt) > 60) {
-    opportunities.push('You haven\'t picked up a bonus task in a while - check the task board for a chance to earn more points.');
-  }
   if (latestLedgerEntry?.worstMetric) {
     opportunities.push(`Your most recent area to improve is ${latestLedgerEntry.worstMetric}.`);
   }
@@ -203,7 +195,7 @@ export default function ProfilePage({ user }) {
             checked={profile.notificationPreferences?.pushEnabled !== false}
             onChange={(e) => handleTogglePushPreference(e.target.checked)}
           />
-          Send notifications to my phone (redemption updates, bonus task and area of highest need results, point changes)
+          Send notifications to my phone (redemption updates, new announcements, point changes)
         </label>
         <p className="muted" style={{ marginBottom: 12 }}>
           Turning this off still shows notifications in the app - you just won't get them on your phone.
