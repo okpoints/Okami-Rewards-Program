@@ -32,4 +32,22 @@ function findCandidates(enteredName, rosterEntries) {
   });
 }
 
-module.exports = { normalizeName, tokenize, findCandidates };
+// Used to catch spelling drift in the weekly Cortex export (e.g. a middle
+// initial that appears one week and not the next) - unlike findCandidates
+// above, drift can go either direction, so a roster entry counts as a
+// candidate if ITS tokens are a subset of the new name's, or vice versa.
+function findDriftCandidates(rawName, rosterEntries) {
+  const nameTokens = new Set(tokenize(rawName));
+  if (nameTokens.size === 0) return [];
+
+  return rosterEntries.filter((entry) => {
+    const nameVariants = [entry.cortexFullName, ...(entry.aliases || [])];
+    const knownTokens = new Set(nameVariants.flatMap(tokenize));
+    if (knownTokens.size === 0) return false;
+    const knownIsSubset = [...knownTokens].every((token) => nameTokens.has(token));
+    const enteredIsSubset = [...nameTokens].every((token) => knownTokens.has(token));
+    return knownIsSubset || enteredIsSubset;
+  });
+}
+
+module.exports = { normalizeName, tokenize, findCandidates, findDriftCandidates };

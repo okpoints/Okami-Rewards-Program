@@ -15,7 +15,7 @@ async function findRosterCandidatesLogic(auth, data) {
   const rosterEntries = unclaimedSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   const candidates = findCandidates(enteredName, rosterEntries);
 
-  return { candidates: candidates.map((c) => ({ rosterId: c.transporterId, fullName: c.cortexFullName })) };
+  return { candidates: candidates.map((c) => ({ rosterId: c.id, fullName: c.cortexFullName })) };
 }
 
 // The driver's "yes that's me" (or "none of these") only ever creates a
@@ -146,11 +146,11 @@ async function addRosterAliasLogic(auth, data, requireRole) {
 
 // Manager/admin manually adds someone to the roster before Cortex has ever
 // reported them (e.g. a brand-new hire's first week isn't imported yet).
-// If Cortex later reports this same person under a real Transporter ID,
-// syncCortexFile (see driveSync.js) flags a rosterMergeSuggestions entry by
-// name match instead of silently creating a disconnected second roster doc
-// - see resolveRosterMergeLogic below for how a manager confirms or
-// dismisses that.
+// If Cortex later reports this same person under a slightly different
+// spelling, syncCortexFile (see driveSync.js) flags a rosterMergeSuggestions
+// entry by name match instead of silently creating a disconnected second
+// roster doc - see resolveRosterMergeLogic below for how a manager confirms
+// or dismisses that.
 async function createRosterEntryLogic(auth, data, requireRole) {
   const role = requireRole(auth, ['manager', 'admin']);
   const { fullName, aliases } = data || {};
@@ -242,7 +242,18 @@ async function performRosterMerge(fromRosterId, intoRosterId, auth) {
     }
 
     tx.update(intoRef, { linkedUserId, linkedAt: admin.firestore.Timestamp.now() });
-    tx.update(fromRef, { active: false, mergedInto: intoRosterId, mergedAt: admin.firestore.Timestamp.now() });
+    // Clearing linkedUserId here (not just deactivating) matters now that
+    // matching is name-based: if this same driver's name drifts back to
+    // matching fromRef's spelling in a future week, fromRef must no longer
+    // look "linked" - otherwise the linked-roster credit loop below would
+    // credit that week's points to this account twice, once via fromRef and
+    // once via intoRef.
+    tx.update(fromRef, {
+      active: false,
+      linkedUserId: null,
+      mergedInto: intoRosterId,
+      mergedAt: admin.firestore.Timestamp.now(),
+    });
     tx.update(db.collection('users').doc(linkedUserId), {
       rosterId: intoRosterId,
       totalPoints: admin.firestore.FieldValue.increment(totalHistoricalPoints),
@@ -280,13 +291,13 @@ async function resolveRosterMergeLogic(auth, data, requireRole) {
     return { success: true };
   }
 
-  const totalHistoricalPoints = await performRosterMerge(suggestion.manualRosterId, suggestion.cortexRosterId, auth);
+  const totalHistoricalPoints = await performRosterMerge(suggestion.fromRosterId, suggestion.intoRosterId, auth);
   await suggestionRef.update({ status: 'merged', resolvedBy: auth.uid, resolvedAt: admin.firestore.Timestamp.now() });
 
   await logActivity({
     actorId: auth.uid, actorName: auth.token.name || 'Unknown', actorPosition: role,
     action: 'merge_roster_entries', targetType: 'rosterMergeSuggestions', targetId: suggestionId,
-    details: { manualRosterId: suggestion.manualRosterId, cortexRosterId: suggestion.cortexRosterId, creditedPoints: totalHistoricalPoints },
+    details: { fromRosterId: suggestion.fromRosterId, intoRosterId: suggestion.intoRosterId, creditedPoints: totalHistoricalPoints },
   });
 
   return { success: true, creditedPoints: totalHistoricalPoints };

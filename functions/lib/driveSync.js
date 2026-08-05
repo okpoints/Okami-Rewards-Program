@@ -2,6 +2,13 @@ const { google } = require('googleapis');
 const { parse } = require('csv-parse/sync');
 const { db, admin } = require('./admin');
 const { logActivity } = require('./activityLog');
+const { normalizeName, findDriftCandidates } = require('./nameMatching');
+
+// Firestore doc IDs can't contain "/" - names basically never do, but this
+// guards against it instead of failing the whole import over one row.
+function rosterIdForName(rawName) {
+  return normalizeName(rawName).replace(/\//g, '-');
+}
 
 // The "Okami Rewards Program" Drive folder that holds the weekly
 // DSP_Overview_Dashboard_OKMI_DCL9_<week>.csv exports from Cortex.
@@ -64,14 +71,14 @@ function parseWeekFromFilename(filename) {
   return match ? match[1] : null;
 }
 
-// Reads the newest Cortex CSV and upserts a roster entry per Transporter ID
-// (a stable ID Cortex assigns per person, unlike their name which is
-// formatted inconsistently week to week). Each row also writes a ledger
-// entry under that roster doc. If the roster entry is already linked to a
-// real driver account, their totalPoints is credited immediately; otherwise
-// the points just sit on the roster until someone claims it at signup time
-// (see roster.js) - turnover here is expected to be constant, so there's
-// no separate "known roster" to maintain by hand.
+// Reads the newest Cortex CSV and upserts a roster entry per driver name
+// (some drivers don't reliably have a Transporter ID in the export, but
+// every row has a name, so that's the match key). Each row also writes a
+// ledger entry under that roster doc. If the roster entry is already linked
+// to a real driver account, their totalPoints is credited immediately;
+// otherwise the points just sit on the roster until someone claims it at
+// signup time (see roster.js) - turnover here is expected to be constant,
+// so there's no separate "known roster" to maintain by hand.
 async function syncCortexFile() {
   const drive = await getDriveClient();
   const file = await findLatestCsv(drive);
@@ -105,43 +112,44 @@ async function syncCortexFile() {
     console.log(`Cortex CSV "${file.name}" header keys:`, JSON.stringify(Object.keys(rows[0])));
   }
 
-  // Snapshotted once up front so a brand-new Transporter ID can be checked
-  // against already-linked manual roster entries (people onboarded via
-  // "Create user account" or a generic invite before Cortex ever saw them)
-  // - if their name matches, this is very likely the same person finally
-  // showing up in a real Cortex export under their actual Transporter ID,
-  // not a new hire. Rather than silently creating a second, disconnected
-  // roster entry (which would strand their future points on an account
-  // nobody's linked to), flag it for a manager to confirm or dismiss.
+  // Snapshotted once up front so a brand-new name can be checked against
+  // already-linked roster entries (people onboarded via "Create user
+  // account"/invite before Cortex ever saw them, or the same driver under a
+  // slightly different spelling than a previous week) - if the name is a
+  // close match to exactly one linked entry, this is very likely the same
+  // person, not a new hire. Rather than silently creating a second,
+  // disconnected roster entry (which would strand their future points on an
+  // account nobody's linked to), flag it for a manager to confirm or
+  // dismiss. Only linked entries are offered as candidates, since merging
+  // moves a linked account onto the new entry (see performRosterMerge) -
+  // there's nothing to move for an entry nobody has claimed yet.
   const existingRosterSnap = await db.collection('roster').get();
   const existingRosterIds = new Set(existingRosterSnap.docs.map((d) => d.id));
-  const manualLinkedByLowerName = new Map();
-  for (const doc of existingRosterSnap.docs) {
-    const data = doc.data();
-    if (data.source !== 'manual' || !data.linkedUserId) continue;
-    const key = (data.cortexFullName || '').trim().toLowerCase();
-    if (!key) continue;
-    if (!manualLinkedByLowerName.has(key)) manualLinkedByLowerName.set(key, []);
-    manualLinkedByLowerName.get(key).push({ id: doc.id, ...data });
-  }
+  const linkedRosterEntries = existingRosterSnap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((entry) => entry.linkedUserId && !entry.mergedInto);
+  const newlyCreatedIds = new Set();
 
   const batch = db.batch();
   let rosterUpdates = 0;
   let mergeSuggestions = 0;
 
   for (const row of rows) {
-    const transporterId = (row['Transporter ID'] || '').trim();
     const rawName = (row['Delivery Associate'] || '').trim();
     const standing = row['Overall Standing'];
     const score = parseFloat(row['Overall Score']);
-    if (!transporterId || !rawName || Number.isNaN(score)) continue;
+    const transporterId = (row['Transporter ID'] || '').trim() || null;
+    if (!rawName || Number.isNaN(score)) continue;
 
-    if (!existingRosterIds.has(transporterId)) {
-      const candidates = (manualLinkedByLowerName.get(rawName.toLowerCase()) || []).filter((c) => c.id !== transporterId);
+    const rosterId = rosterIdForName(rawName);
+    if (!rosterId) continue;
+
+    if (!existingRosterIds.has(rosterId) && !newlyCreatedIds.has(rosterId)) {
+      const candidates = findDriftCandidates(rawName, linkedRosterEntries);
       if (candidates.length === 1) {
         batch.set(db.collection('rosterMergeSuggestions').doc(), {
-          manualRosterId: candidates[0].id,
-          cortexRosterId: transporterId,
+          fromRosterId: candidates[0].id,
+          intoRosterId: rosterId,
           fullName: rawName,
           week,
           status: 'pending',
@@ -149,10 +157,11 @@ async function syncCortexFile() {
         });
         mergeSuggestions += 1;
       }
+      newlyCreatedIds.add(rosterId);
     }
 
     const { best, worst } = bestAndWorstMetric(row);
-    const rosterRef = db.collection('roster').doc(transporterId);
+    const rosterRef = db.collection('roster').doc(rosterId);
     const ledgerRef = rosterRef.collection('ledger').doc(week);
 
     batch.set(ledgerRef, {
@@ -185,7 +194,7 @@ async function syncCortexFile() {
   // week "imported" (which would silently block ever retrying it).
   if (rosterUpdates === 0) {
     throw new Error(
-      `Found "${file.name}" with ${rows.length} row(s), but none had a usable Transporter ID, Delivery Associate, ` +
+      `Found "${file.name}" with ${rows.length} row(s), but none had a usable Delivery Associate name ` +
       'and Overall Score - check the CSV\'s column headers match exactly.'
     );
   }

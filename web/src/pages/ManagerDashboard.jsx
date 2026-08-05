@@ -670,15 +670,15 @@ export default function ManagerDashboard({ user, role, activeTab }) {
         <div className="card">
           <h2>Possible roster duplicates ({rosterMergeSuggestions.length})</h2>
           <p className="muted">
-            Cortex just reported someone under a real Transporter ID whose name matches an already-linked, manually-added
-            roster entry. Confirm if it's the same person (merges the two and credits their points) or dismiss if it's a
-            coincidence.
+            This week's Cortex sync saw a name close to an already-linked roster entry, but not an exact match (could be
+            a spelling variation in the export). Confirm if it's the same person (merges the two and credits their
+            points) or dismiss if it's a coincidence.
           </p>
           {rosterMergeSuggestions.map((s) => (
             <div className="list-row" key={s.id} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
               <span>
                 <strong>{s.fullName}</strong>{' '}
-                <span className="muted">- newly synced from Cortex ({s.week}), matches an existing manual entry</span>
+                <span className="muted">- newly synced from Cortex ({s.week}), close to an existing entry</span>
               </span>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button className="btn btn-primary" onClick={() => handleResolveRosterMerge(s.id, 'merge')}>
