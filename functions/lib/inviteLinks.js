@@ -3,11 +3,13 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const { db, admin } = require('./admin');
 const { logActivity } = require('./activityLog');
 
-// Admin is deliberately excluded - granting admin access always goes
-// through Privilege Assignment on an account that already exists, never
-// straight through a link. A leaked/forwarded invite link only ever grants
-// as much as Employee or Manager.
+// A manager (even one delegated createUserAccounts) can only ever generate
+// an Employee/Manager link - an admin-granting link is a bigger risk than
+// direct creation (nothing ties it to a specific person, so a leaked or
+// forwarded link would let whoever holds it grant themselves admin), so
+// it's restricted to admin callers only, checked in createInviteLinkLogic.
 const INVITABLE_ROLES = ['associate', 'manager'];
+const ADMIN_INVITABLE_ROLES = ['associate', 'manager', 'admin'];
 const INVITE_EXPIRY_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
 
 function generateToken() {
@@ -32,8 +34,9 @@ async function requireCreatePermission(auth, callerRole) {
 async function createInviteLinkLogic(auth, data, requireRole) {
   const callerRole = requireRole(auth, ['admin', 'manager']);
   const { role: inviteRole, label, rosterId } = data || {};
-  if (!INVITABLE_ROLES.includes(inviteRole)) {
-    throw new HttpsError('invalid-argument', `role must be one of: ${INVITABLE_ROLES.join(', ')}`);
+  const allowedRoles = callerRole === 'admin' ? ADMIN_INVITABLE_ROLES : INVITABLE_ROLES;
+  if (!allowedRoles.includes(inviteRole)) {
+    throw new HttpsError('invalid-argument', `role must be one of: ${allowedRoles.join(', ')}`);
   }
   await requireCreatePermission(auth, callerRole);
 

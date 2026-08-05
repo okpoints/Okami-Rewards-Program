@@ -1233,7 +1233,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
           <p className="muted">
             Generate a link so someone can sign up themselves and land with the role already set - no email needed
             up front, and it skips the Cortex identity check since the link itself vouches for who they are. Links
-            expire after 7 days and work once. Admin can't be granted this way - only Employee or Manager.
+            expire after 7 days and work once.{role !== 'admin' ? ' Admin can\'t be granted this way - only Employee or Manager.' : ' Be careful with an Admin link - whoever holds it can grant themselves admin access, so only share it directly with the intended person.'}
           </p>
           <form onSubmit={handleCreateInviteLink} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 12 }}>
             <div className="field">
@@ -1241,6 +1241,7 @@ export default function ManagerDashboard({ user, role, activeTab }) {
               <select value={newInvite.role} onChange={(e) => setNewInvite({ ...newInvite, role: e.target.value })}>
                 <option value="associate">Employee</option>
                 <option value="manager">Manager</option>
+                {role === 'admin' && <option value="admin">Admin</option>}
               </select>
             </div>
             <div className="field" style={{ flex: '1 1 200px' }}>
